@@ -1,0 +1,1269 @@
+# IST 707 Data Analytics HOMEWORK 3: Disease Prediction for Patients using NBC, KNN, SVM and Ensemble Learning methods
+## Submitted by BHAVISH KUMAR on April 5th 2020
+
+## A. Executive Summary:
+*</b> The purpose of this assignment is to use the several classification techniques that we learned in the course to help solve the binary classification problem of predicting if a patient has the disease or not. The goal is to accurately predict if a given patient has the disease or not, thereby producing very good Accuracy, Recall and AUROC scores. Six different Supervised Machine Learning algorithms were used to build models on the training dataset (dataset which contains the Target variable 'Disease' with its 2 classes) and these models were later used to make predictions on the new test dataset. The six Machine Learning algorithms that were used to achieve this outcome were K Nearest Neighbours, Naive Bayes Classifier, Linear Support Vector Machines, Non Linear Support Vector Machines and the 2 Ensemble methods used were Gradient Boosting and Random Forest. The goal of each model is to produce unbiased and low variance predictions which was achieved by extensive hyperparameter tuning done through a grid search. Several model evaluation techniques, which we will observe in the upcoming sections of the report were used to produce the best model.*
+
+## B. INTRODUCTION:
+*</b> In the below Analysis the following Machine Learning Algorithms have been built:*
+**</b> i. K Nearest Neighbors: This is a distance based lazy evaluation algorithm that considers the class of the 'K' nearest training data neighbors of a test data point to classify every test datapoint. The number of neighbors to be considered 'K' is a hyperparameter that can be tuned.**
+**</b> ii. Naive Bayes Classifier: This is a probability based classifier that uses Conditional Probabilites, Prior Probability and Evidence to calculate the probability of a test data point for each of the two classes. Bayes Theorem is used to calculate the probability of a test data belonging to each of the class. Laplace smoothing is used to avoid 0 probability issue and laplace is a hyperparameter that can be tuned**
+**</b> iii. Random Forest: This is an ensemble method consisting of multiple decision trees which combines the predictions made by multiple decison trees and each tree is generated using a selected number of input features. The number of features required for each decision tree and the number of decision trees are the two hyperparameters that can be tuned.**
+**</b> iv. Gradient Boosting: This is also an ensemble method consisting of multiple decision trees where each decision tree is built sequentially one after the other and the final ensemble model is produced by taking the weighted average of predictions made by each base classifier.The depth of each Tree, the number of trees the learning rate and the minimum number of data points needed in each node for splitting are the hyperparameters that can be tuned.**
+**</b> v. Support Vector Machines: This is a distance based classification algorithm that uses lines or hyperplanes to classify the datapoints by producing a seperator to easily classify the data points. The cost function, gamma and kernel are the hyperparameters that can be tuned**
+*</b> The following techniques were used for model performance evaluation:*
+**</b> K fold Cross Validation was done while training each of the models on train data to control for overfitting, so that the model is built by ensuring that it performs well not just on train data but also on validation data which it has not seen before. Holdout method was also used where 70% of the data was used to train the model using K fold Cross Validation and the remaining 30% was used to measure the model performance on the data that it has not seen before. The model performance has been measured by using Accuracy, Precison, Recall, F1 score metrics, ROC curve and Area Under ROC curve**
+
+## C. Body of the Report:
+
+#### Reading the Training data csv and storing it into a dataframe
+```{r}
+setwd("C:/Users/bhavi/OneDrive/Desktop/SYR ADS/Sem 2/IST_707_Data_Analytics/HW3")
+
+getwd
+
+disease_prediction_training <- read.csv("Disease Prediction Training.csv")
+```
+
+*VIEWING THE STRUCTURE and SUMMARY STATISTICS of the Data and checking for missing values*
+```{r}
+
+str(disease_prediction_training)
+summary(disease_prediction_training)
+
+```
+
+## SECTION 1: DATA PREPARATION & Exploratoy Data Analysis
+
+### 1. Identifying the Data Quality Issues:
+*</b> As we can see from the above summary that the data has no missing values and hence NA imputation is not required*
+*</b> However, we can observe issues with 2 columns Low Blood Pressure and High Blood Pressure.*
+*</b>From the structure and summary of the data we can observe that the Min and Max values of the columns Low Blood Pressure and High Blood Pressure are not practically possible values and hence they are noise/outliers which need to be treated. Hence these columns need to be winsorized.*
+*</b> Winsorization is a data treatment process where the extreme outlier values are replaced with less extreme values which are practically possible*
+```{r}
+quantile(disease_prediction_training$Low.Blood.Pressure,c(0.001))
+quantile(disease_prediction_training$Low.Blood.Pressure,c(0.986))
+```
+
+**</b>From the above 0.1 & 98.6 percentile values of low BP column we can observe that the possible values for the min & max of low BP (diastolic BP) fall in the range of 45 to 140 and hence any value that is less than 45 is replaced with 45 and any value greater than 140 is replaced with 140**
+
+```{r}
+disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure<quantile(disease_prediction_training$Low.Blood.Pressure,c(0.001))] <- quantile(disease_prediction_training$Low.Blood.Pressure,c(0.001))
+
+disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>quantile(disease_prediction_training$Low.Blood.Pressure,c(0.986))] <- quantile(disease_prediction_training$Low.Blood.Pressure,c(0.986))
+```
+
+**</b>Verifying that the Min & Max values of Low Blood Pressure (Diastolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_training$Low.Blood.Pressure)
+```
+
+*</br> The high Blood Pressure column also needs to winsorized to ensure that the values fall in the practically permissible range and outliers are eliminated*
+```{r}
+quantile(disease_prediction_training$High.Blood.Pressure,c(0.003))
+quantile(disease_prediction_training$High.Blood.Pressure,c(0.998))
+```
+
+**</b>From the above 0.3 & 99.8 percentile values of High BP column we can observe that the possible values for the min & max of High BP (Systolic BP) fall in the range of 70 to 200 and hence any value that is less than 70 is replaced with 70 and any value greater than 200 is replaced with 200**
+```{r}
+disease_prediction_training$High.Blood.Pressure[disease_prediction_training$High.Blood.Pressure<quantile(disease_prediction_training$High.Blood.Pressure,c(0.003))] <- quantile(disease_prediction_training$High.Blood.Pressure,c(0.003))
+
+disease_prediction_training$High.Blood.Pressure[disease_prediction_training$High.Blood.Pressure>quantile(disease_prediction_training$High.Blood.Pressure,c(0.998))] <- quantile(disease_prediction_training$High.Blood.Pressure,c(0.998))
+```
+
+**</b>Verifying that the Min & Max values of High Blood Pressure (Systolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_training$High.Blood.Pressure)
+```
+
+*</b> There are 245 instances where Low BP is > high BP even after winsorizing which needs to treated by swapping the values*
+```{r}
+length(disease_prediction_training[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure,1])
+```
+
+*</b> Swapping the values wherever Low BP > High BP which is not permissible*
+```{r}
+low_bp_values <- disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure]
+
+high_bp_values <- disease_prediction_training$High.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure]
+
+disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure] <- high_bp_values
+
+disease_prediction_training$High.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure] <- low_bp_values
+
+```
+
+**</b> Verifying that there are no instances with low bp values > high bp values**
+```{r}
+length(disease_prediction_training[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure,1])
+```
+
+*</b> The weight column has very low values, two of which are as low as 10Kg and 11Kg, which are practically very unlikely and hence they need to be winsorized*
+```{r}
+quantile(disease_prediction_training$Weight,c(0.0001))
+```
+
+**</b>Any value that is less than 0.01 percentile value, are replaced with the 0.01 percentile value = 28.9**
+```{r}
+disease_prediction_training$Weight[disease_prediction_training$Weight<quantile(disease_prediction_training$Weight,c(0.0001))] <- quantile(disease_prediction_training$Weight,c(0.0001))
+```
+
+**</b>Verifying that the Min & Max values of Weight are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_training$Weight)
+```
+
+### 2. EXPLORATORY DATA ANALYSIS:
+
+#### 2.1. Bi Variate Analysis between Age and Disease column
+*</b> Creating Age Groups column based on quartiles for EDA purpose*
+**</b>We assume that the number of people with the disease is higher for higher age groups, which we can verify by producing a bar graph**
+```{r}
+
+library(stringr)
+disease_prediction_training$age_groups <-cut(disease_prediction_training$Age, breaks = c(quantile(disease_prediction_training$Age, probs = c(0,0.25,0.5,0.75,1))),
+     labels = c(str_c(quantile(disease_prediction_training$Age,probs = 0),quantile(disease_prediction_training$Age,probs = 0.25),sep = " to "),str_c(quantile(disease_prediction_training$Age,probs = 0.25),quantile(disease_prediction_training$Age,probs = 0.5),sep = " to "),str_c(quantile(disease_prediction_training$Age,probs = 0.5),quantile(disease_prediction_training$Age,probs = 0.75),sep = " to "),str_c(quantile(disease_prediction_training$Age,probs = 0.75),quantile(disease_prediction_training$Age,probs = 1),sep = " to ")), right = FALSE, include.lowest=TRUE)
+disease_prediction_training$age_groups<-as.factor(disease_prediction_training$age_groups)
+#unique(disease_prediction_training$age_groups)
+```
+
+
+*</b> From the below bar group our assumption has been verified, as we can observe that the number of people with the disease increases as we go up the age groups and the older age groups have the highest number of patients with the disease*
+```{r}
+library(tidyverse)
+library(ggplot2)
+disease_count_by_ageGroups <- disease_prediction_training %>%
+      group_by(age_groups)%>%
+      summarise(sum(Disease))
+colnames(disease_count_by_ageGroups) <- c('age_groups','NO_ppl_with_disease')
+age_group_disease_plot <- ggplot(disease_count_by_ageGroups,aes(age_groups,NO_ppl_with_disease))+geom_bar(stat = "identity")+
+             xlab("Age Groups")+ ylab("Number of people with disease")+ ggtitle("Age Group VS count of patients")
+age_group_disease_plot
+
+```
+
+#### 2.2. Bi Variate Analysis between Gender and Disease column
+
+**</b>We can observe that there are more number of female patients with the disease than males**
+```{r}
+disease_count_by_gender <- disease_prediction_training %>%
+      group_by(Gender)%>%
+      summarise(sum(Disease))
+colnames(disease_count_by_gender) <- c('Gender','NO_ppl_with_disease')
+
+gender_disease_plot <- ggplot(disease_count_by_gender,aes(Gender,NO_ppl_with_disease))+geom_bar(stat = "identity")+
+             xlab("Gender")+ ylab("Number of people with disease")+ ggtitle("Gender VS count of patients")
+gender_disease_plot
+```
+
+
+#### 2.3. Bi Variate Analysis between Height+Weight (BMI) and Disease column
+
+*</b>Creating a new Body Mass Index (BMI) column by combining Height and Weight column, where BMI = (Weight in Kg)/(Height in meteres)^2*
+*</b> The BMI column can be used to classify the patients as Underweight, Healthy, Overweight and Obese*
+*</b> Underwight if BMI < 18.5; Healthy if BMI between 18.5 and 24.9; Overweight if BMI between 25 and 29.9; Obese if BMI greater than 30*
+```{r}
+disease_prediction_training$bmi <- disease_prediction_training$Weight/((disease_prediction_training$Height/100)*(disease_prediction_training$Height/100))
+disease_prediction_training$bmi_groups <-cut(disease_prediction_training$bmi, breaks = c(0,18.5,24.9,29.9,Inf), labels = c('Underweight','Healthy','Overweight','Obese'))
+
+```
+
+
+*</b> We can observe that number of people with the disease is more for Overweight and Obese BMI groups in comparison to Healthy and Underweight BMI groups*
+```{r}
+disease_count_by_bmi_groups <- disease_prediction_training %>%
+      group_by(bmi_groups)%>%
+      summarise(sum(Disease))
+colnames(disease_count_by_bmi_groups) <- c('bmi_groups','NO_ppl_with_disease')
+
+bmi_disease_plot <- ggplot(disease_count_by_bmi_groups,aes(bmi_groups,NO_ppl_with_disease))+geom_bar(stat = "identity")+
+             xlab("bmi_groups")+ ylab("Number of people with disease")+ ggtitle("BMI groups VS count of patients")
+bmi_disease_plot
+```
+
+
+
+#### 2.4. Bi Variate Analysis between Cholestrol and Disease column
+*</b> We can observe that the percentage of people with the disease is much higher amongst 'high' and 'too high' Cholesterol groups of people*
+```{r}
+disease_count_by_cholestrol <- disease_prediction_training %>%
+      group_by(Cholesterol,as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_cholestrol) <- c('Cholesterol','Disease','NO_ppl')
+
+Cholesterol_disease_plot <- ggplot(disease_count_by_cholestrol,aes(fill = Disease,x=Cholesterol,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Cholesterol")+ ylab("Number of people with/without disease")+ ggtitle("Cholesterol VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Cholesterol_disease_plot
+
+```
+
+
+
+#### 2.5. Bi Variate Analysis between Glucose and Disease column
+*</b> We can observe that the percentage of people with the disease is higher amongst 'high' and 'too high' Glucose groups of people*
+```{r}
+disease_count_by_Glucose <- disease_prediction_training %>%
+      group_by(Glucose,as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_Glucose) <- c('Glucose','Disease','NO_ppl')
+
+Glucose_disease_plot <- ggplot(disease_count_by_Glucose,aes(fill = Disease,x=Glucose,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Glucose")+ ylab("Number of people with/without disease")+ ggtitle("Glucose VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Glucose_disease_plot
+```
+
+
+#### 2.6. Bi Variate Analysis between Smoke and Disease column
+*</b> We can't observe a significant difference in the percentage of people with the disease amongst 'smoker' and 'non smoker' groups of people*
+```{r}
+disease_count_by_Smoke <- disease_prediction_training %>%
+      group_by(as.factor(Smoke),as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_Smoke) <- c('Smoke','Disease','NO_ppl')
+
+Smoke_disease_plot <- ggplot(disease_count_by_Smoke,aes(fill = Disease,x=Smoke,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Smoke")+ ylab("Number of people with/without disease")+ ggtitle("Smoke VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Smoke_disease_plot
+```
+
+#### 2.7. Bi Variate Analysis between Alcohol and Disease column
+*</b> We can't observe a significant difference in the percentage of people with the disease amongst 'alcohol consumer' and 'non alcohol consumer' groups of people*
+```{r}
+disease_count_by_Alcohol <- disease_prediction_training %>%
+      group_by(as.factor(Alcohol),as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_Alcohol) <- c('Alcohol','Disease','NO_ppl')
+
+Alcohol_disease_plot <- ggplot(disease_count_by_Alcohol,aes(fill = Disease,x=Alcohol,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Alcohol")+ ylab("Number of people with/without disease")+ ggtitle("Alcohol VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Alcohol_disease_plot
+```
+
+
+#### 2.8. Bi Variate Analysis between Exercise and Disease column
+*</b> We can't observe a significant difference in the percentage of people with the disease amongst 'Exercise' and 'non Exercise' groups of people*
+```{r}
+disease_count_by_Exercise <- disease_prediction_training %>%
+      group_by(as.factor(Exercise),as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_Exercise) <- c('Exercise','Disease','NO_ppl')
+
+Exercise_disease_plot <- ggplot(disease_count_by_Exercise,aes(fill = Disease,x=Exercise,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Exercise")+ ylab("Number of people with/without disease")+ ggtitle("Exercise VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Exercise_disease_plot
+```
+
+
+#### 2.9. Uni Variate Analysis - Histogram of Age column to view the distribution
+*</b> The Age column distribution is slightly left skewed*
+```{r}
+hist(disease_prediction_training$Age)
+abline(v=mean(disease_prediction_training$Age),col = "red",lwd = 4)
+abline(v=median(disease_prediction_training$Age),col = "blue", lwd = 2)
+legend(x = "topright", 
+       c("Mean", "Median"),
+       col = c("red", "blue"),lwd = c(4,2))
+```
+
+#### 2.10. Uni Variate Analysis - Histogram of Height column to view the distribution
+*</b> The Height column distribution is mostly normally distributed*
+```{r}
+hist(disease_prediction_training$Height)
+abline(v=mean(disease_prediction_training$Height),col = "red",lwd = 4)
+abline(v=median(disease_prediction_training$Height),col = "blue", lwd = 2)
+legend(x = "topright", 
+       c("Mean", "Median"),
+       col = c("red", "blue"),lwd = c(4,2))
+```
+
+
+#### 2.11. Uni Variate Analysis - Histogram of Weight column to view the distribution
+*</b> The Weight column is mostly normally distributed with a slight right skew resulting in mean>median*
+```{r}
+hist(disease_prediction_training$Weight)
+abline(v=mean(disease_prediction_training$Weight),col = "red",lwd = 4)
+abline(v=median(disease_prediction_training$Weight),col = "blue", lwd = 2)
+legend(x = "topright", 
+       c("Mean", "Median"),
+       col = c("red", "blue"),lwd = c(4,2))
+```
+
+#### 2.12. Uni Variate Analysis - Histogram of Low.Blood.Pressure column to view the distribution
+*</b> The Low.Blood.Pressure column is mostly normally distributed with a slight right skew resulting in mean>median*
+```{r}
+hist(disease_prediction_training$Low.Blood.Pressure)
+abline(v=mean(disease_prediction_training$Low.Blood.Pressure),col = "red",lwd = 4)
+abline(v=median(disease_prediction_training$Low.Blood.Pressure),col = "blue", lwd = 2)
+legend(x = "topright", 
+       c("Mean", "Median"),
+       col = c("red", "blue"),lwd = c(4,2))
+```
+
+#### 2.13. Uni Variate Analysis - Histogram of High.Blood.Pressure column to view the distribution
+*</b> The High.Blood.Pressure column is mostly normally distributed with a right skew resulting in mean>median*
+```{r}
+hist(disease_prediction_training$High.Blood.Pressure)
+abline(v=mean(disease_prediction_training$High.Blood.Pressure),col = "red",lwd = 4)
+abline(v=median(disease_prediction_training$High.Blood.Pressure),col = "blue", lwd = 2)
+legend(x = "topright", 
+       c("Mean", "Median"),
+       col = c("red", "blue"),lwd = c(4,2))
+```
+
+### 3. DATA PREPARATION for KNN & SVM :
+#### For KNN and SVM, which are distance based algorithms, we require all the categorical variables to be converted to Numeric by performing one hot encoding and also all the numeric variables have to be normalized so that all the columns have values in the range of 0 to 1.
+*</b> Creating Dummy Variables out of all categorical variables by performing one hot encoding and normalizing all numeric columns using Min Max scaler*
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+library(fastDummies)
+disease_prediction_training_knn_svm <- disease_prediction_training
+disease_prediction_training_knn_svm<-fastDummies::dummy_cols(disease_prediction_training_knn_svm,select_columns=c('Gender','Cholesterol','Glucose'))
+
+disease_prediction_training_knn_svm$Age <- normalize(disease_prediction_training_knn_svm$Age)
+disease_prediction_training_knn_svm$Height <- normalize(disease_prediction_training_knn_svm$Height)
+disease_prediction_training_knn_svm$Weight <- normalize(disease_prediction_training_knn_svm$Weight)
+disease_prediction_training_knn_svm$bmi <- normalize(disease_prediction_training_knn_svm$bmi)
+disease_prediction_training_knn_svm$Low.Blood.Pressure <- normalize(disease_prediction_training_knn_svm$Low.Blood.Pressure)
+disease_prediction_training_knn_svm$High.Blood.Pressure <- normalize(disease_prediction_training_knn_svm$High.Blood.Pressure)
+```
+
+**</b>Getting rid of non numeric columns**
+```{r}
+disease_prediction_training_knn_svm$Gender <- NULL
+disease_prediction_training_knn_svm$Cholesterol <- NULL
+disease_prediction_training_knn_svm$Glucose <- NULL
+disease_prediction_training_knn_svm$age_groups <- NULL
+
+disease_prediction_training_knn_svm$bmi_groups <- NULL
+disease_prediction_training_knn_svm$Gender_male <- NULL
+disease_prediction_training_knn_svm$Disease <- as.factor(disease_prediction_training_knn_svm$Disease)
+```
+
+
+## SECTION 2: BUILD, TUNE & EVALUATE various ML ALGORITHMS
+### 2.1 K Nearest Neighbors (KNN)
+
+*</b>Generating Training and Validation datasets for KNN algorithm with 70% & 30% splits respectively. (Hold one Out method to ensure that the model built doesn't overfit on train data by comparing the accuracies obtained on training data and validation data)*
+```{r}
+library(caret)
+set.seed(188)
+train_index <- createDataPartition(disease_prediction_training_knn_svm$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_knn_train <- disease_prediction_training_knn_svm[train_index, ]
+disease_prediction_knn_train$Disease <- as.factor(disease_prediction_knn_train$Disease)
+disease_prediction_knn_test <- disease_prediction_training_knn_svm[-train_index, ]
+disease_prediction_knn_test$Disease <- as.factor(disease_prediction_knn_test$Disease)
+disease_prediction_knn_train$Height <- NULL
+disease_prediction_knn_train$Weight <- NULL
+disease_prediction_knn_test$Height <- NULL
+disease_prediction_knn_test$Weight <- NULL
+```
+
+*BUILDING BASELINE MODEL for KNN by maximizing Accuracy*
+```{r}
+
+#baseline_model_knn <- train(Disease ~ ., data = disease_prediction_knn_train, method = "knn")
+predict_disease_knn <- predict(baseline_model_knn, newdata = disease_prediction_knn_test)
+```
+
+*The baseline model produced the following accuracies on the training data for different values of K*
+```{r}
+print(baseline_model_knn)
+```
+
+
+*</b> The baseline model produced the below shown accuracy and sensitivity on validation data which it has not seen before.*
+```{r}
+confusionMatrix(predict_disease_knn,disease_prediction_knn_test$Disease, positive = "1")
+```
+
+#### Fine tuning the hyperparameter 'K' for producing the best possible accuracy.
+*</b>The Hyperparameter 'K' in KNN algorithm denotes the number of nearest neighbor rows in the training data that are used to classify each validation data row. The data point is classified based on the majority class of its nearest neighbors & in case of a tie, one class is randomly chosen.*
+**</b> If K is too small it will result in high variance and if K is too large it will result in high bias. Hence an optimum value of K must be chosen to produce unbiased and low variance estimates**
+*</b>Fine tuning the model to produce maximum accuracy and using 5 fold Cross Validation to train the model by controlling for overfitting*
+```{r}
+
+#tuned_model_knn <- train(Disease ~ ., data = disease_prediction_knn_train, method = "knn",
+#                    tuneGrid = data.frame(k = seq(20, 40)),
+#                    trControl = trainControl(method = "repeatedcv",
+#                                             number = 5, repeats = 3))
+```
+
+*</b> From the below table summarizing the best performing models and their corresponding accuracies we can see the accuracies for different values of K*
+```{r}
+print(tuned_model_knn)
+```
+
+**</b>Obtaining Predicted values for disease on validation data using the fine tuned KNN model**
+```{r}
+predict_disease_tuned_knn <- predict(tuned_model_knn, newdata = disease_prediction_knn_test)
+```
+
+*Evaluating Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data. (Hold one out method to control for overfitting)*
+**</b>After fine tuning the hyperparameters, the accuracy of KNN model has increased and the risk of overfitting also has been avoided. Since the accuracy of the validation data is inline with the accuracy of the train data, the model is not overfitting on the train data**
+```{r}
+disease_prediction_knn_test$predicted_disease <- predict_disease_tuned_knn
+conf_matrix <- data.frame(table(disease_prediction_knn_test$Disease,disease_prediction_knn_test$predicted_disease)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of best KNN Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of KNN Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of KNN Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of KNN Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+*</b>Fine tuning the model to produce maximum Recall by tuning it on Sensitivity(Recall) metric*
+**</b> Recall is also an important metric to optimize in this case because, by maximizing Recall, we will be reducing False Negatives. False Negatives are cases where a patient actually has the disease but our model classifies the patient as not having the disease. False Negatives can be very dangerous because patients with the disease might go without receiving any treatment which is a highly undesirable situation. Hence we should focus on maximizing Recall to minimize False Negatives**
+```{r}
+#tuned_model_knn_recall <- train(Disease ~ ., data = disease_prediction_knn_train, method = "knn",
+#                    tuneGrid = data.frame(k = seq(20, 40)),metric="Sens",
+#                    trControl = trainControl(method = "repeatedcv",
+#                                             number = 5, repeats = 3,
+#                                             summaryFunction = twoClassSummary))
+```
+
+*</b> From the below table summarizing the best performing models and their corresponding Sensitivities, we can see the Sensitivities for different values of K*
+```{r}
+print(tuned_model_knn_recall)
+```
+
+**</b>Obtaining Predicted values for disease on validation data using the best fine tuned KNN model **
+```{r}
+predict_disease_tuned_knn_recall <- predict(tuned_model_knn_recall, newdata = disease_prediction_knn_test)
+```
+
+*Evaluating Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data*
+**</b>After fine tuning the hyperparameters and optimizing for Recall metric, the accuracy, precision, recall and F1 scores on the validation data did not change much in comparison to the values obtained by maximizing the Accuracy metric**
+*</b> Hence we can proceed with the model that was built by maximing the accuracy metric itself as our best model*
+```{r}
+disease_prediction_knn_test$predicted_disease_recallTuned <- predict_disease_tuned_knn_recall
+conf_matrix <- data.frame(table(disease_prediction_knn_test$Disease,disease_prediction_knn_test$predicted_disease_recallTuned)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of best KNN Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of KNN Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of KNN Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of KNN Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### ROC & AUROC for the best KNN Model
+
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+*Generated ROC curve and calculated Area Under Curve metric for the identified best performing KNN model*
+```{r}
+knn_pred_disease <- predict(tuned_model_knn, newdata = disease_prediction_knn_test, na.action = na.omit, type = "prob")
+roc_curve <- roc(disease_prediction_knn_test$Disease,knn_pred_disease$`1`)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best KNN model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING KNN Model (ML algorithm number 1)
+
+### 2.2 Naive Bayes Classifier Model (NBC)
+*</b> Creating Training and Validation data splits (Hold One Out method)*
+```{r}
+library(caret)
+set.seed(188)
+train_index <- createDataPartition(disease_prediction_training$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_nb_train <- disease_prediction_training[train_index, ]
+disease_prediction_nb_train$Disease <- as.factor(disease_prediction_nb_train$Disease)
+disease_prediction_nb_train$age_groups <- NULL
+disease_prediction_nb_train$Height <- NULL
+disease_prediction_nb_train$Weight <- NULL
+disease_prediction_nb_train$Smoke <- as.factor(disease_prediction_nb_train$Smoke)
+disease_prediction_nb_train$Alcohol <- as.factor(disease_prediction_nb_train$Alcohol)
+disease_prediction_nb_train$Exercise <- as.factor(disease_prediction_nb_train$Exercise)
+
+disease_prediction_nb_test <- disease_prediction_training[-train_index, ]
+disease_prediction_nb_test$Disease <- as.factor(disease_prediction_nb_test$Disease)
+disease_prediction_nb_test$age_groups <- NULL
+disease_prediction_nb_test$Height <- NULL
+disease_prediction_nb_test$Weight <- NULL
+disease_prediction_nb_test$Smoke <- as.factor(disease_prediction_nb_test$Smoke)
+disease_prediction_nb_test$Alcohol <- as.factor(disease_prediction_nb_test$Alcohol)
+disease_prediction_nb_test$Exercise <- as.factor(disease_prediction_nb_test$Exercise)
+
+```
+
+
+```{r}
+#install.packages("e1071", dependencies = TRUE)
+library(e1071)
+```
+
+#### Naive Bayes baseline model
+```{r}
+#install.packages("klaR")
+library(klaR)
+nb_baseline_model <- naiveBayes(Disease~ ., data = disease_prediction_nb_train)
+
+```
+
+```{r}
+predict_disease_nb <- predict(nb_baseline_model, newdata = disease_prediction_nb_test,  type = c("class", "raw"))
+```
+
+*</b> Measuring the accuracy, precision, recall and F1 Score of the Naive Bayes base model by making predictions on the validation dataset and comparing it with actual values. These metrics are used to evaluate the Naive Bayes model performance.*
+```{r}
+disease_prediction_nb_test$predicted_disease_nb <- predict_disease_nb
+conf_matrix <- data.frame(table(disease_prediction_nb_test$Disease,disease_prediction_nb_test$predicted_disease_nb)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of NB Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of NB in classifying Disease is :",Precision_DT)
+paste("Recall of NB in classifying Disease is :",Recall_DT)
+paste("F1 Score of NB in classifying Disease is :",F1_score_DT)
+```
+
+#### Tuning the Laplace Hyperparameter for Naive Bayes Classifier
+
+*Performing Grid Search with different values of laplace and measuring the accuracy for each one*
+```{r}
+laplace_values <- c(1,2,3,4,5)
+accuracy_values <- c()
+for (i in laplace_values) {
+  
+  nb_tuned_model <- naiveBayes(Disease~ ., data = disease_prediction_nb_train, laplace = i)
+  predict_disease_nb <- predict(nb_tuned_model, newdata = disease_prediction_nb_test,  type = c("class", "raw"))
+  
+disease_prediction_nb_test$predicted_disease_nb <- predict_disease_nb
+conf_matrix <- data.frame(table(disease_prediction_nb_test$Disease,disease_prediction_nb_test$predicted_disease_nb)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+  accuracy_values<- c(accuracy_values,Accuracy_DT)
+}
+```
+
+*</b> From the below table we can observe that there is no significant difference in accuracy for different values of laplace. Hence we can proceed with the baseline model and produce the ROc curve and AUROC*
+```{r}
+data.frame(accuracy_values,laplace_values)
+```
+
+
+*Generated ROC curve and calculated Area Under Curve metric for the identified best performing Naive Bayes Classifier model*
+```{r}
+nb_pred_disease <- predict(nb_baseline_model, newdata = disease_prediction_nb_test, na.action = na.omit, type = "raw")
+roc_curve <- roc(disease_prediction_nb_test$Disease,nb_pred_disease[,2])
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best NBC model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING Naive Bayes Classifier (ML algorithm number 2)
+
+### 2.3 Random Forest Model (RF)
+*</b> Creating Training and Validation data splits (Hold One Out method)*
+```{r}
+library(caret)
+set.seed(188)
+train_index <- createDataPartition(disease_prediction_training$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_rf_train <- disease_prediction_training[train_index, ]
+disease_prediction_rf_train$Disease <- as.factor(disease_prediction_rf_train$Disease)
+
+
+disease_prediction_rf_test <- disease_prediction_training[-train_index, ]
+disease_prediction_rf_test$Disease <- as.factor(disease_prediction_rf_test$Disease)
+```
+
+
+*</b> Running baseline model for Random Forest*
+```{r}
+#baselinemodel_rf <- train(Disease ~ ., data = disease_prediction_rf_train, method = "rf")
+```
+
+*</b> The baseline model accuracies on training dataset for different values of mtry where mtry is the number of features selected for each tree*
+```{r}
+baselinemodel_rf
+```
+
+```{r}
+predict_disease_rf_base <- predict(baselinemodel_rf, newdata = disease_prediction_rf_test)
+```
+
+*Evaluating the Random Forest Baseline Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data.Verified that the accuracy of the baseline model on training data is in line with the accuracy of the model on validation data.*
+```{r}
+disease_prediction_rf_test$predicted_disease_rf_baseline <- predict_disease_rf_base
+conf_matrix <- data.frame(table(disease_prediction_rf_test$Disease,disease_prediction_rf_test$predicted_disease_rf_baseline)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of baseline RF Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of baseline RF Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of baseline RF Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of baseline RF Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+*</b> Checking the importance of variables to exclude the least important variables before running the grid search *
+**</b> From the below table we can conclude that age_groups and Alcohol are less important features**
+```{r}
+varImp(baselinemodel_rf)
+```
+
+
+#### Performing Grid Search by tuning hyperparameters to maximize Accuracy
+*</b> mtry and ntree are the two tuning hyperparameters that are used to tune the Random Forest Model. mtry denotes the number of features that are selected for each decision tree and ntree is the number of decision trees that are going to get created. For Producing unbiased estimates we should let each of our decision tree grow to its full size without pruning and in order to reduce variance we need to optimize the number of features selected for each Tree (mtry) and try to keep it at a smaller number. We can also control the number of trees (ntree) to reduce the variance*
+*</b>3 Fold Cross Validation is also done on the training data to control for Overfitting*
+```{r}
+
+#library(caret)
+#control <- trainControl(method="repeatedcv", number=3, repeats=3, search="grid")
+#tunegrid <- expand.grid(.mtry=c(2,3,4))
+#modellist <- list()
+#for (ntree in c(400,600,800,1000)) {
+#   set.seed(100)
+#  tuned_model_rf <- train(Disease~., data=disease_prediction_rf_train, method="rf", metric="Accuracy", tuneGrid=tunegrid, trControl=control, ntree=ntree)
+#    key <- toString(ntree)
+#    modellist[[key]] <- tuned_model_rf
+#}
+
+```
+
+
+*</b>From the below grid search results table we can observe the accuracies of the models based on number of trees as shown in the table below*
+```{r}
+accuracies <- c(max(modellist$`400`$results$Accuracy),max(modellist$`600`$results$Accuracy),max(modellist$`800`$results$Accuracy),max(modellist$`1000`$results$Accuracy))
+number_of_tress <- c(400,600,800,1000)
+data.frame(number_of_tress,accuracies) 
+```
+
+**</b> Proceeding with the model with 800 trees as the best model. Also mtry = 2 was chosen as the best model which produced maximum accuracy**
+```{r}
+tuned_model_rf <- modellist$`800`
+tuned_model_rf
+```
+
+
+```{r}
+predict_disease_rf_tuned <- predict(tuned_model_rf, newdata = disease_prediction_rf_test)
+```
+
+*Evaluating the Random Forest tuned Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data (Hold One Out Method)*
+**</b> We don't see a sigificant improvement in accuracy, recall and F1 score between the baseline model and fine tuned model. Also since the validation data is producing an accuracy inline with the training data accuracy we can be assured that the model is not overfitting on the training data**
+```{r}
+disease_prediction_rf_test$predicted_disease_rf_tuned <- predict_disease_rf_tuned
+conf_matrix <- data.frame(table(disease_prediction_rf_test$Disease,disease_prediction_rf_test$predicted_disease_rf_tuned)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of Tuned RF Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of Tuned RF Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of Tuned RF Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of Tuned RF Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### Performing Grid Search by tuning the same hyperparameters to maximize Recall
+```{r}
+control <- trainControl(method="repeatedcv", number=3, repeats=3, search="grid",summaryFunction = twoClassSummary)
+tunegrid <- expand.grid(.mtry=c(2,3,4))
+modellist <- list()
+for (ntree in c(400,600,800,1000)) {
+    set.seed(100)
+    tuned_model_rf_recall <- train(Disease~., data=disease_prediction_rf_train, method="rf", metric="Sens", tuneGrid=tunegrid, trControl=control, ntree=ntree)
+    key <- toString(ntree)
+    modellist[[key]] <- tuned_model_rf_recall
+}
+```
+
+
+```{r}
+predict_disease_rf_tuned_recall <- predict(tuned_model_rf_recall, newdata = disease_prediction_rf_test)
+```
+
+*Evaluating the Random Forest tuned Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data*
+*</b>Since the Recall is not improving between the 2 models, we will go ahead with the first model (the model that maximizes accuracy) that was built by maximizing Accuracy*
+```{r}
+disease_prediction_rf_test$predicted_disease_rf_tuned_recall <- predict_disease_rf_tuned_recall
+conf_matrix <- data.frame(table(disease_prediction_rf_test$Disease,disease_prediction_rf_test$predicted_disease_rf_tuned_recall)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of Tuned RF Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of Tuned RF Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of Tuned RF Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of Tuned RF Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+
+#### ROC & AUROC for the best Random Forest Model
+
+*Generated ROC curve and calculated Area Under Curve metric for the identified best performing RF model. The ROC curve is plotted by obtaining probabilities of the target variable classes.*
+```{r}
+rf_pred_disease <- predict(tuned_model_rf, newdata = disease_prediction_rf_test, na.action = na.omit, type = "prob")
+roc_curve <- roc(disease_prediction_rf_test$Disease,rf_pred_disease$`1`)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best RF model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+
+#### END OF BUILDING RF Model (ML algorithm number 3)
+
+### 2.4 Gradient Boosting Algorithm 
+*</b> Creating Training and Validation data splits (Hold one out method)*
+```{r}
+library(caret)
+set.seed(188)
+train_index <- createDataPartition(disease_prediction_training$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_gb_train <- disease_prediction_training[train_index, ]
+disease_prediction_gb_train$Disease <- as.factor(disease_prediction_gb_train$Disease)
+
+
+disease_prediction_gb_test <- disease_prediction_training[-train_index, ]
+disease_prediction_gb_test$Disease <- as.factor(disease_prediction_gb_test$Disease)
+```
+
+
+```{r}
+#install.packages("gbm")
+library(gbm)
+```
+
+
+*</b> Running baseline model for Gradient Boosting Algorithm*
+```{r} 
+
+#baselinemodel_gb <- train(Disease ~ ., data = disease_prediction_gb_train, method = "gbm")
+```
+
+*</b> From the below results we can observe the accuracies of the baseline model for each value of n.trees and interaction.depth. The combinations of depth and number of trees that produced the best accuracy was chosen as the final model*
+```{r}
+
+baselinemodel_gb
+```
+
+```{r}
+predict_disease_gb_base <- predict(baselinemodel_gb, newdata = disease_prediction_gb_test)
+```
+
+*Evaluating the Gradient Boosting Baseline Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data (Hold One Out method)*
+*<b>By verifying that the accuracy of the model on training data and validation data are in line, we can ensure that the model is not overfitting on the training data.*
+```{r}
+disease_prediction_gb_test$predicted_disease_gb_baseline <- predict_disease_gb_base
+conf_matrix <- data.frame(table(disease_prediction_gb_test$Disease,disease_prediction_gb_test$predicted_disease_gb_baseline)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of baseline GB Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of baseline GB Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of baseline GB Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of baseline GB Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### Performing Grid Search by tuning hyperparameters to maximize Accuracy
+*</b> The hyperparameters are interaction.depth (tree depth) which controls the complexity of the trees, n.trees to limit the number of iterations(trees), shrinkage which measures the learning rate and n.minobsinnode which denotes the number of rows in a node to begin splitting. For controlling overfitting we should limit the depth of the tree and increase the number of trees and also increase the minimum number of rows required in a node*
+*</b>Increasing the tree depth may reduce the bias but can increase variance, whereas increasing the number of trees can reduce variance and increase bias.*
+*</b> 3 Fold Cross Validation technique is also used to train the model on the training data*
+```{r}
+
+#set.seed(188)
+#gbm_tuned <- train(Disease ~ ., data = disease_prediction_gb_train, 
+#                       tuneGrid = expand.grid(interaction.depth=c(1, 3, 5), n.trees = c(50,100,150,200),
+#                       shrinkage=c(0.01, 0.05,0.1),n.minobsinnode=c(5,10)), method = "gbm",
+#                       trControl = trainControl(method="cv", number=3, repeats = 3),
+#                       metric="Accuracy")
+
+```
+
+*</b> From the below table we can see the training data Accuracies for different values of shrinkage, interaction depth, minobsinnode, number of trees*
+*</b>The model with the best training data accuracy is chosen as the final model*
+```{r}
+gbm_tuned
+```
+
+
+```{r}
+predict_disease_gb_tuned <- predict(gbm_tuned, newdata = disease_prediction_gb_test)
+```
+
+
+*Evaluating the Grdient Boosting tuned Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data*
+**</b> We can see an improvement in recall and F1 score between the baseline model and fine tuned model. Since the accuracies of the training data is comparable to the validation data accuracies, we can be sure that the model is not overfitting on the training data**
+```{r}
+disease_prediction_gb_test$predicted_disease_gb_tuned <- predict_disease_gb_tuned
+conf_matrix <- data.frame(table(disease_prediction_gb_test$Disease,disease_prediction_gb_test$predicted_disease_gb_tuned)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of tuned GB Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of tuned GB Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of tuned GB Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of tuned GB Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+
+
+#### ROC & AUROC for the best Gradient Boost Model
+
+*Generated ROC curve and calculated Area Under Curve metric for the identified best performing Gradient Boosting Model*
+```{r}
+library(pROC)
+gb_pred_disease <- predict(gbm_tuned, newdata = disease_prediction_gb_test, na.action = na.omit, type = "prob")
+roc_curve <- roc(disease_prediction_gb_test$Disease,gb_pred_disease$`1`)
+plot(roc_curve)
+```
+
+
+**Obtained the area under the ROC curve for the best GB model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING GB Model (ML algorithm number 4)
+
+### 2.5 LINEAR SUPPORT VECTOR MACHINE 
+*</b> Creating Training and Validation data splits*
+```{r}
+library(caret)
+set.seed(188)
+train_index <- createDataPartition(disease_prediction_training_knn_svm$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_svml_train <- disease_prediction_training_knn_svm[train_index, ]
+disease_prediction_svml_train$Disease <- as.factor(disease_prediction_svml_train$Disease)
+disease_prediction_svml_test <- disease_prediction_training_knn_svm[-train_index, ]
+disease_prediction_svml_test$Disease <- as.factor(disease_prediction_knn_test$Disease)
+disease_prediction_svml_train$Height <- NULL
+disease_prediction_svml_train$Weight <- NULL
+disease_prediction_svml_test$Height <- NULL
+disease_prediction_svml_test$Weight <- NULL
+```
+
+
+```{r}
+#install.packages("mlbench")
+library(mlbench)
+```
+
+
+*</b> Running baseline model for Linear SVM Algorithm*
+```{r} 
+#baselinemodel_svml <- train(Disease ~ ., data = disease_prediction_svml_train, method = "svmLinear")
+```
+
+*</b> The below result shows the accuracy of the baseline model*
+```{r}
+baselinemodel_svml
+```
+
+```{r}
+predict_disease_svml_base <- predict(baselinemodel_svml, newdata = disease_prediction_svml_test)
+```
+
+*Evaluating the Linear SVM Baseline Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data (Hold One out method to ensure that the model is performing well on the data that it was trained on and also on a new data that it has not seen before)*
+**</b> The model produced an accuracy on validation data is inline with the accuracy obtained on training data, hence the model is not overfitting on train data.**
+```{r}
+disease_prediction_svml_test$predicted_disease_svml_baseline <- predict_disease_svml_base
+conf_matrix <- data.frame(table(disease_prediction_svml_test$Disease,disease_prediction_svml_test$predicted_disease_svml_baseline)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of baseline SVM Linear Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of baseline SVM Linear Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of baseline SVM Linear Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of baseline SVM Linear Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### Performing Grid Search by tuning hyperparameters to maximize Accuracy
+*</b> The hyperparameters Cost Function (C) is being tuned to produce the best model with low bias and variance. By increasing C, the bias is reduced and variance is increased thereby increasing the risk of overfitting, whereas by decreasing C the variance will decrease and reduce the risk of overfitting, but the bias increases which in turn increases the risk of underfitting. Hence an optimum value of C has to be chosen which produces the right balance between Bias and Variance*
+```{r}
+
+#set.seed(188)
+#svml_tuned <- train(Disease ~ ., data = disease_prediction_svml_train,
+#                          method = "svmLinear",
+#                          trControl = trainControl(method = "cv", number = 3,repeats = 3),
+#                          tuneGrid = expand.grid(C = seq(0, 1, 0.05)),
+#                          metric="Accuracy")
+
+```
+
+*</b> From the below table we can see the Accuracies for different values of Cost Function for Linear SVM models*
+*</b>The model which prodcued the best accuracy was chosen as the final model*
+```{r}
+svml_tuned
+```
+
+
+```{r}
+predict_disease_svml_tuned <- predict(svml_tuned, newdata = disease_prediction_svml_test)
+```
+
+
+*Evaluating the Linear SVM tuned model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data (Hold One out method to ensure that the model is performing well on the data that it was trained on and also on a new data that it has not seen before)*
+**</b> The Accuracy score on validation data is in line with the accuracy produced on training data and hence the model is not overfitting. We can see not much significant difference in the metrics scores between the baseline model and fine tuned model. **
+```{r}
+disease_prediction_svml_test$predict_disease_svml_tuned <- predict_disease_svml_tuned
+conf_matrix <- data.frame(table(disease_prediction_svml_test$Disease,disease_prediction_svml_test$predict_disease_svml_tuned)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of tuned Linear SVM Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of tuned Linear SVM Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of tuned Linear SVM Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of tuned Linear SVM Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### END OF BUILDING Linear SVM Model (ML algorithm number 5)
+
+
+### 2.6 NON LINEAR SUPPORT VECTOR MACHINE 
+*</b> Creating Training and Validation data splits*
+```{r}
+library(caret)
+set.seed(188)
+train_index <- createDataPartition(disease_prediction_training_knn_svm$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_svmnl_train <- disease_prediction_training_knn_svm[train_index, ]
+disease_prediction_svmnl_train$Disease <- as.factor(disease_prediction_svmnl_train$Disease)
+disease_prediction_svmnl_test <- disease_prediction_training_knn_svm[-train_index, ]
+disease_prediction_svmnl_test$Disease <- as.factor(disease_prediction_svmnl_test$Disease)
+disease_prediction_svmnl_train$Height <- NULL
+disease_prediction_svmnl_train$Weight <- NULL
+disease_prediction_svmnl_test$Height <- NULL
+disease_prediction_svmnl_test$Weight <- NULL
+```
+
+
+```{r}
+#install.packages("mlbench")
+library(mlbench)
+```
+
+
+*</b> Running baseline model for Non Linear SVM using RBF kernel*
+```{r} 
+#baselinemodel_svmnl <- train(Disease ~ ., data = disease_prediction_svmnl_train, method = "svmRadial")
+```
+
+*</b> The result shows the accuracy of the baseline model on training dataset for different values of C*
+```{r}
+baselinemodel_svmnl
+```
+
+```{r}
+predict_disease_svmnl_base <- predict(baselinemodel_svmnl, newdata = disease_prediction_svmnl_test)
+```
+
+*Evaluating the Linear SVM Baseline Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data (Hold One out method to ensure that the model is performing well on the data that it was trained on and also on a new data that it has not seen before)*
+**</b> The model accuracy on validation data is inline with the accuracy obtained on training data, hence the model is not ovverfitting on train data.**
+```{r}
+disease_prediction_svmnl_test$predicted_disease_svmnl_baseline <- predict_disease_svmnl_base
+conf_matrix <- data.frame(table(disease_prediction_svmnl_test$Disease,disease_prediction_svmnl_test$predicted_disease_svmnl_baseline)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of baseline SVM Non Linear Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of baseline SVM Non Linear Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of baseline SVM Non Linear Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of baseline SVM Non Linear Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### Performing Grid Search by tuning hyperparameters to maximize Accuracy
+*</b> The hyperparameters Cost Function (C) is being tuned to produce the best model with low bias and variance. By increasing C, the bias is reduced and variance is increased thereby increasing the risk of overfitting, whereas by decreasing C the variance will decrease and reduce the risk of overfitting, but the bias increases which in turn increases the risk of underfitting. Hence an optimum value of C has to be chosen which produces the right balance between Bias and Variance*
+*</b>Similarly, higher sigma (gamma) increases variance, thereby increasing the risk of overfitting and reduces bias. Lower sigma increases bias and reduces variance thereby increasing the risk of underfitting.Hence both C and gamma move in the same direction when it comes to impacting the model performance.*
+*</b> 3 Fold Cross Validation is also done to control for overfitting*
+```{r}
+#set.seed(188)
+#svmnl_tuned <- train(Disease ~ ., data = disease_prediction_svmnl_train,
+#                          method = "svmRadial",
+#                          trControl = trainControl(method = "cv", number = 3,repeats = 3),
+#                          tuneGrid = expand.grid(sigma = c(0.1,0.5,1),
+#                                              C = c(0.1,0.5,1
+#                                                    )),
+#                          metric="Accuracy")
+
+```
+
+*</b> From the below table we can see the Accuracies for different values of Cost Function and sigma for Non Linear SVM models*
+*</b>The model which produced the best accuracy was chosen as the final model*
+```{r}
+svmnl_tuned
+```
+
+
+```{r}
+predict_disease_svmnl_tuned <- predict(svmnl_tuned, newdata = disease_prediction_svmnl_test)
+```
+
+
+*Evaluating the Non Linear SVM tuned model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data (Hold One out method to ensure that the model is performing well on the data that it was trained on and also on a new data that it has not seen before)*
+**</b> The Accuracy score on validation data is in line with the accuracy produced on training data and hence the model is not overfitting. We can see not much significant difference in the metrics scores between the baseline model and fine tuned model. **
+```{r}
+disease_prediction_svmnl_test$predict_disease_svmnl_tuned <- predict_disease_svmnl_tuned
+conf_matrix <- data.frame(table(disease_prediction_svmnl_test$Disease,disease_prediction_svmnl_test$predict_disease_svmnl_tuned)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of tuned RBF SVM Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of tuned RBF SVM Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of tuned RBF SVM Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of tuned RBF SVM Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### END OF BUILDING Non Linear SVM Model (ML algorithm number 6)
+
+### Comparing Gradient Boosting Machine, Linear and Non Linear SVM models
+*</b> We can observe that Gradient Boosting Machine has the best Accuracy and Kappa scores*
+```{r}
+model_comparison <- resamples(list(Gradient_Boosting_Machine = gbm_tuned,
+                                   SVM_Linear = svml_tuned, SVM_RBF = svmnl_tuned))
+summary(model_comparison)
+```
+
+### END of Model Building, Tuning and Evaluation
+
+## SECTION 3: PREDICTION and INTERPRETATION
+#### Importing the TEST Dataset to apply all the built models on the test dataset to predict if each person in the testing dataset has the disease
+
+```{r}
+setwd("C:/Users/bhavi/OneDrive/Desktop/SYR ADS/Sem 2/IST_707_Data_Analytics/HW3")
+
+getwd
+
+disease_prediction_testing <- read.csv("Disease Prediction Testing.csv")
+```
+
+*VIEWING THE STRUCTURE and SUMMARY STATISTICS of the Data and checking for missing values*
+```{r}
+
+str(disease_prediction_testing)
+summary(disease_prediction_testing)
+
+```
+
+### DATA PREPARATION of Testing Data
+*</b>From the structure and summary of the data we can observe that the Min and Max values of the columns Low Blood Pressure and High Blood Pressure are not practically possible values and hence they are noise/outliers which need to be treated. Hence these columns need to be winsorized.*
+*</b> Winsorization is a data treatment process where the extreme outlier values are replaced with less extreme values which are practically possible*
+**</b>The min & max of low BP (diastolic BP) fall in the range of 45 to 140 and hence any value that is less than 45 is replaced with 45 and any value greater than 140 is replaced with 140**
+
+```{r}
+disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure<45] <- 45
+
+disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>140] <- 140
+```
+
+**</b>Verifying that the Min & Max values of Low Blood Pressure (Diastolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_testing$Low.Blood.Pressure)
+```
+
+**</b>The possible values for the min & max of High BP (Systolic BP) fall in the range of 70 to 200 and hence any value that is less than 70 is replaced with 70 and any value greater than 200 is replaced with 200**
+```{r}
+disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$High.Blood.Pressure<70] <- 70
+
+disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$High.Blood.Pressure>200] <- 200
+```
+
+**</b>Verifying that the Min & Max values of High Blood Pressure (Systolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_testing$High.Blood.Pressure)
+```
+
+*</b> There are 84 instances where Low BP is > high BP even after winsorizing which needs to treated by swapping the values*
+```{r}
+length(disease_prediction_testing[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure,1])
+```
+
+*</b> Swapping the values wherever Low BP > High BP which is not permissible*
+```{r}
+low_bp_values <- disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure]
+
+high_bp_values <- disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure]
+
+disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure] <- high_bp_values
+
+disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure] <- low_bp_values
+
+```
+
+**</b> Verifying that there are no instances with low bp values > high bp values**
+```{r}
+length(disease_prediction_testing[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure,1])
+```
+
+**</b>Any value that is less than 28.9 are replaced with 28.9**
+```{r}
+disease_prediction_testing$Weight[disease_prediction_testing$Weight<28.9] <- 28.9
+```
+
+**</b>Verifying that the Min & Max values of Weight are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_testing$Weight)
+```
+
+
+#### DATA PREPARATION for KNN & SVM :
+#### For KNN and SVM, which are distance based algorithms, we require all the categorical variables to be converted to Numeric by performing one hot encoding and also all the numeric variables have to be normalized so that all the columns have values in the range of 0 to 1.
+*</b> Creating Dummy Variables out of all categorical variables by performing one hot encoding and normalizing all numeric columns using Min Max scaler*
+```{r}
+disease_prediction_testing$bmi <- disease_prediction_testing$Weight/((disease_prediction_testing$Height/100)*(disease_prediction_testing$Height/100))
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+library(fastDummies)
+disease_prediction_testing_knn_svm <- disease_prediction_testing
+disease_prediction_testing_knn_svm<-fastDummies::dummy_cols(disease_prediction_testing_knn_svm,select_columns=c('Gender','Cholesterol','Glucose'))
+
+disease_prediction_testing_knn_svm$Age <- normalize(disease_prediction_testing_knn_svm$Age)
+disease_prediction_testing_knn_svm$Height <- normalize(disease_prediction_testing_knn_svm$Height)
+disease_prediction_testing_knn_svm$Weight <- normalize(disease_prediction_testing_knn_svm$Weight)
+disease_prediction_testing_knn_svm$bmi <- normalize(disease_prediction_testing_knn_svm$bmi)
+disease_prediction_testing_knn_svm$Low.Blood.Pressure <- normalize(disease_prediction_testing_knn_svm$Low.Blood.Pressure)
+disease_prediction_testing_knn_svm$High.Blood.Pressure <- normalize(disease_prediction_testing_knn_svm$High.Blood.Pressure)
+```
+
+**</b>Getting rid of non numeric columns**
+```{r}
+disease_prediction_testing_knn_svm$Gender <- NULL
+disease_prediction_testing_knn_svm$Cholesterol <- NULL
+disease_prediction_testing_knn_svm$Glucose <- NULL
+disease_prediction_testing_knn_svm$age_groups <- NULL
+
+disease_prediction_testing_knn_svm$bmi_groups <- NULL
+disease_prediction_testing_knn_svm$Gender_male <- NULL
+disease_prediction_testing_knn_svm$ID <- NULL
+```
+
+
+#### 1. Obtaining Predicted values for disease on TEST data using the final KNN model**
+```{r}
+KNN <- predict(tuned_model_knn, newdata = disease_prediction_testing_knn_svm)
+disease_prediction_testing$KNN <- KNN
+```
+
+
+
+#### 2. Naive Bayes Classifier Model (NBC)
+```{r}
+library(caret)
+disease_prediction_nb_testing <- disease_prediction_testing
+disease_prediction_nb_testing$age_groups <- NULL
+disease_prediction_nb_testing$Height <- NULL
+disease_prediction_nb_testing$Weight <- NULL
+disease_prediction_nb_testing$Smoke <- as.factor(disease_prediction_nb_testing$Smoke)
+disease_prediction_nb_testing$Alcohol <- as.factor(disease_prediction_nb_testing$Alcohol)
+disease_prediction_nb_testing$Exercise <- as.factor(disease_prediction_nb_testing$Exercise)
+
+```
+
+#### Obtaining Predicted values for disease on TEST data using the final NBC model
+```{r}
+NBC <- predict(nb_baseline_model, newdata = disease_prediction_nb_testing,  type = c("class", "raw"))
+disease_prediction_testing$NBC <- NBC
+```
+
+#### 3. Random Forest Model (RF)
+
+```{r}
+disease_prediction_testing$age_groups <-cut(disease_prediction_testing$Age, breaks = c(quantile(disease_prediction_testing$Age, probs = c(0,0.25,0.5,0.75,1))),labels = c(str_c(quantile(disease_prediction_testing$Age,probs = 0),quantile(disease_prediction_testing$Age,probs = 0.25),sep = " to "),str_c(quantile(disease_prediction_testing$Age,probs = 0.25),quantile(disease_prediction_testing$Age,probs = 0.5),sep = " to "),str_c(quantile(disease_prediction_testing$Age,probs = 0.5),quantile(disease_prediction_testing$Age,probs = 0.75),sep = " to "),str_c(quantile(disease_prediction_testing$Age,probs = 0.75),quantile(disease_prediction_testing$Age,probs = 1),sep = " to ")), right = FALSE, include.lowest=TRUE)
+disease_prediction_testing$age_groups<-as.factor(disease_prediction_testing$age_groups)
+```
+
+#### Obtaining Predicted values for disease on TEST data using the Random Forest model
+```{r}
+RF <- predict(tuned_model_rf, newdata = disease_prediction_testing)
+disease_prediction_testing$RF <- RF
+```
+
+#### 4. Gradient Boosting Algorithm 
+#### Obtaining Predicted values for disease on TEST data using the Gradient Boosting model
+
+```{r}
+GBM <- predict(gbm_tuned, newdata = disease_prediction_testing)
+disease_prediction_testing$GBM <- GBM
+```
+
+#### 5. LINEAR SUPPORT VECTOR MACHINE 
+#### Obtaining Predicted values for disease on TEST data using the Linear SVM model
+
+```{r}
+SVM_Linear <- predict(svml_tuned, newdata = disease_prediction_testing_knn_svm)
+disease_prediction_testing$SVM_Linear <- SVM_Linear
+```
+
+#### 6. RBF SUPPORT VECTOR MACHINE 
+#### Obtaining Predicted values for disease on TEST data using the RBF SVM model
+
+```{r}
+SVM_RBF <- predict(svmnl_tuned, newdata = disease_prediction_testing_knn_svm)
+disease_prediction_testing$SVM_RBF <- SVM_RBF
+```
+
+##### Writing the final predictions to a CSV
+```{r}
+final_predictions <- disease_prediction_testing[,c('ID','NBC','KNN','SVM_Linear','SVM_RBF','RF','GBM')]
+write.csv(final_predictions,"HW_03_Kumar_Bhavish_Predictions.csv")
+```
+
+
+## D. CONCLUSION:
+*</b> From the above model building, tuning and evaluation we can understand the importance of tuning hyperparameters through a grid search to improve the model performance. We also the learned the importance of K fold cross validation and hold one out techniques to ensure that the model performs well not only on the training data but also on the validation data which it has not seen before. From the above 6 algorithms we can observe that the ensemble methods like Gradient Boosting and Random Forest are one of the best performing models*
