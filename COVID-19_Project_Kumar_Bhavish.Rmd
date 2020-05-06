@@ -1,0 +1,870 @@
+# IST 707 Data Analytics COVID-19 PROJECT: COVID-19 Infection prediction using the best performing regression and classification algorithms
+## Submitted by BHAVISH KUMAR on April 30th 2020
+
+## A. Executive Summary:
+**</b> The purpose of this assignment is to use the best performing regression algorithms that we have learned in the course to help predict the target variable which is the probability of an individual having the covid-19 infection. The continuous numeric variable probability can be discretized into 2 classes 'yes' and 'no' by considering all the rows with probability less than 50% as 'no' and 'yes' otherwise. The purpose of discretizing the target variable into binary classes, is to predict if the individual has the Covid-19 infection or not, as sometimes we may be only interested in knowing if the individual has the infection or not and we may not be interested in predicting the probability of having the infection. We can Solve the binary classification problem of predicting if a patient has the disease or not through machine learning and deep learning. The goal is to accurately predict the probability of an individual having the infection (Regression Problem) and also to predict if an individual has the infection or not (Classification problem).**
+
+## B. INTRODUCTION:
+**Different Supervised Machine Learning algorithms were used to build models on the training dataset and these models were later validated using a validation dataset. The Learning algorithms that were used to achieve this outcome were Linear Regression, Random Forest Regression, 2 layer Artificial Neural Network for Regression, followed by Logistic Regression, Gradient Boosting Machine and ANN2 for classification.These algorithms were chosen because these ensemble and deep learning methods usually produce the best results. The goal of each model is to produce unbiased and low variance predictions which was achieved by extensive hyperparameter tuning done through a grid search and also through feature selection based on variable importance. Several model evaluation techniques were used to produce the best model.**</br>
+**</b> The following techniques were used for model performance evaluation:**</br>
+**</b> K fold Cross Validation was done while training Logistic Regression & Decision Tree models on train data to control for overfitting, so that the model is built by ensuring that it performs well not just on train data but also on validation data which it has not seen before. Holdout method was also used where 70% of the data was used to train the model using K fold Cross Validation and the remaining 30% was used to measure the model performance on the data that it has not seen before.** </br>
+**The performance of the regression models were measured using the Root Mean Square Error (RMSE) and RSquare values. RMSE can take any value between 0 to infinity and it depends on the range of values of the target variable and it takes the units of the target variable. Whereas, RSquare values are scaled and they fall between 0 and 1. RSquare is an indication of the amount of the variation in the target variable that can be explained by the independent variables. R Square value is not dependent on the range of the target variable as it is scaled to fall between 0 and 1.**</br>
+**The model performance of classification algorithms have been measured by using Accuracy, Precison, Recall, F1 score and Area Under ROC curve metrics.**
+
+## C. Body of the Report:
+
+#### Reading the data csv and storing it into a dataframe
+
+```{r}
+#setwd("D:/SYR ADS/Sem 2/IST_707_Data_Analytics/IST 707 COVID 19 EXTRA PROJECTS")
+#getwd
+covid19_prediction_df <- read.csv("Train_dataset.csv")
+```
+
+#### A quick glance at the structure and summary of the dataset will help us identify a lot of the data quality issues.
+```{r}
+str(covid19_prediction_df)
+summary(covid19_prediction_df)
+```
+
+
+## SECTION 1: DATA PREPARATION & Exploratory Data Analysis
+
+### 1.1. Handling Data Quality Issues
+
+#### Removing unnecessary columns such as People_ID, Designation & Name which will have no role in explaining the target variable.
+```{r}
+covid19_prediction_df$people_ID <- NULL
+covid19_prediction_df$Designation <- NULL
+covid19_prediction_df$Name <- NULL
+```
+
+
+#### Obtaining median of all the numeric columns with NAs at a region level
+```{r}
+library(tidyverse)
+median_region <- covid19_prediction_df %>%
+      group_by(Region)%>%
+      summarise(median(Children, na.rm=TRUE),median(Diuresis, na.rm = TRUE),median(Platelets, na.rm = TRUE),
+                median(HBB,na.rm = TRUE),median(d.dimer,na.rm = TRUE),median(Heart.rate,na.rm = TRUE),median(HDL.cholesterol, na.rm = TRUE),
+                median(Insurance, na.rm = TRUE),median(FT.month, na.rm = TRUE))
+colnames(median_region) <- c('Region','Children','Diuresis','Platelets','HBB','d.dimer','Heart.rate','HDL.cholesterol','Insurance','FT.month')
+```
+
+
+#### Replacing NAs in numeric columns with Median of that column obtained at a Region level from the above table 
+```{r}
+NAintcols <- c('Children','Diuresis','Platelets','HBB','d.dimer','Heart.rate','HDL.cholesterol','Insurance','FT.month')
+for (coln in NAintcols) {
+    indexOfNA <- which(is.na(covid19_prediction_df[,coln]))
+    for (i in indexOfNA) {
+      covid19_prediction_df[i,coln] <- as.numeric(median_region[median_region$Region==covid19_prediction_df[i,"Region"],coln])
+    }
+}
+```
+
+
+#### Obtaining mode of the factor columns at Region level to impute missing values
+*Function to obtain mode of a vector*
+```{r}
+  getmode <- function(x) {
+  ux <- na.omit(unique(x) )
+ tab <- tabulate(match(x, ux)); ux[tab == max(tab) ]
+}
+```
+
+#### Creating table with Mode of the column at Region level
+```{r}
+library(tidyverse)
+mode_region <- covid19_prediction_df %>%
+      group_by(Region)%>%
+      summarise(getmode(Mode_transport),getmode(comorbidity),getmode(cardiological.pressure))
+colnames(mode_region) <- c('Region','Mode_transport','comorbidity','cardiological.pressure')
+```
+
+#### Imputing missing values in categorical column with mode of that column obtained at a region level
+```{r}
+NAcatcols <- c('Mode_transport','comorbidity','cardiological.pressure')
+for (coln in NAcatcols) 
+  {
+    indexOfNA <- which(covid19_prediction_df[,coln] == "")
+    for (i in indexOfNA) 
+      {
+      covid19_prediction_df[i,coln] <- mode_region[mode_region$Region==covid19_prediction_df[i,"Region"],coln]
+    }
+}
+```
+
+```{r}
+covid19_prediction_df$Mode_transport <- as.character(covid19_prediction_df$Mode_transport)
+covid19_prediction_df$Mode_transport <- as.factor(covid19_prediction_df$Mode_transport)
+
+covid19_prediction_df$comorbidity <- as.character(covid19_prediction_df$comorbidity)
+covid19_prediction_df$comorbidity <- as.factor(covid19_prediction_df$comorbidity)
+
+covid19_prediction_df$cardiological.pressure <- as.character(covid19_prediction_df$cardiological.pressure)
+covid19_prediction_df$cardiological.pressure <- as.factor(covid19_prediction_df$cardiological.pressure)
+```
+
+
+#### Viewing the Structure and SUmmary of the Cleaned Dataset
+```{r}
+str(covid19_prediction_df)
+summary(covid19_prediction_df)
+```
+
+### 1.2 Univariate Analysis to identify outliers
+#### Plotting histogram of numeric columns to view the distribution and check for potential outliers
+##### Since most of the distributions are uniform, we can rule out the possibility of outliers in these columns
+```{r}
+library(gridExtra)
+hist_plot <- function(data_in, i) 
+  {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(data[,1])) + 
+    geom_histogram(bins = 30, col="red", aes(fill=..count..)) +
+    xlab(colnames(data_in)[i]) +
+    scale_fill_gradient("Count", low="green", high="red")
+  return (p)
+}
+mygrid2 <- list()
+for (i in 1:length(covid19_prediction_df[,c('Diuresis','Platelets','Insurance','salary')])){
+  myplot2 <- hist_plot(covid19_prediction_df[,c('Diuresis','Platelets','Insurance','salary')], i)
+  mygrid2 <- c(mygrid2, list(myplot2)) 
+}
+do.call("grid.arrange", c(mygrid2, ncol=2))
+```
+
+#### The following variables also follow a uniform distribution as shown below
+```{r}
+library(gridExtra)
+hist_plot <- function(data_in, i) 
+  {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(data[,1])) + 
+    geom_histogram(bins = 30, col="red", aes(fill=..count..)) +
+    xlab(colnames(data_in)[i]) +
+    scale_fill_gradient("Count", low="green", high="red")
+  return (p)
+}
+mygrid2 <- list()
+for (i in 1:length(covid19_prediction_df[,c('Children','Age','HBB','d.dimer','Heart.rate','HDL.cholesterol','Charlson.Index','Blood.Glucose','cases.1M','Deaths.1M')])){
+  myplot2 <- hist_plot(covid19_prediction_df[,c('Children','Age','HBB','d.dimer','Heart.rate','HDL.cholesterol','Charlson.Index','Blood.Glucose','cases.1M','Deaths.1M')], i)
+  mygrid2 <- c(mygrid2, list(myplot2)) 
+}
+do.call("grid.arrange", c(mygrid2, ncol=2))
+```
+
+**Hence the issue of outliers can be ruled out from this dataset**
+
+
+
+### 1.3 Bivariate Analysis to identify patterns/trends and realtionship with target variable
+#### We can validate our assumptions through Bi Variate Analysis
+
+#### A. Producing the Correlation Matrix and Correlation Plot between all the numeric variables
+```{r}
+covid19_num_cols_df <- covid19_prediction_df[,c(sapply(covid19_prediction_df, is.integer))]
+covid19_num_cols_df$Infect_Prob <- covid19_prediction_df$Infect_Prob
+covid19_prediction_df.cor = cor(covid19_num_cols_df)
+#cor.test(covid19_prediction_df$Age,covid19_prediction_df$Infect_Prob)
+covid19_prediction_df.cor
+```
+
+#### From the below correlation plot we can observe that the Target Variable "Infection Probability" has highest correlation with "Cases per million", "deaths per million" and "Age" of ~17% each and ~-33% respectively. With an increase in cases per million in the region, there is an increase in chances of getting infected.
+#### **The rest of the predictor variables are almost uncorrelated with each other and therefore, we will not have the issue of multicollinearity**
+```{r}
+library(corrplot)
+corrplot(covid19_prediction_df.cor, type = "upper", order = "hclust", 
+         tl.col = "black", tl.srt = 45)
+```
+
+#### B. Grouping the target variable "Infection Probability" into two groups '0' and '1' based on 50% cut off probability, where 0 denotes that the person does not have the infection and 1 denotes that the person has the infection.
+**Grouping into categories for doing bi variate EDA with the target variable**
+```{r}
+covid19_prediction_df$disease <-cut(covid19_prediction_df$Infect_Prob, breaks = c(0,50,100), labels = c('0','1'))
+```
+
+####  C. Plotting stacked bar graph to see proportion of Covid-19 cases amongst married and unmarried people
+**One interesting observation that we can see is that, amongst the Unmarried people, a large proportion of them have the disease**
+```{r}
+
+disease_count_by_Married <- covid19_prediction_df %>%
+      group_by(Married,as.factor(disease))%>%
+      summarise(n())
+colnames(disease_count_by_Married) <- c('Married','Disease','NO_ppl')
+
+married_disease_plot <- ggplot(disease_count_by_Married,aes(fill = Disease,x=Married,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Married")+ ylab("Number of people with/without disease")+ ggtitle("Married VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+married_disease_plot
+
+```
+
+
+
+## SECTION 2: BUILD, TUNE & EVALUATE various ML ALGORITHMS
+## A. Keeping the target variable as continuous numeric to apply regression based learning algorithms to predict the continuous numeric target variable
+### 2.1 Linear Regression to identify the important variables based on the coefficients and their P values
+
+**</b>Generating Training and Validation datasets for regression algorithm with 70% & 30% splits respectively. (Hold one Out method to ensure that the model built doesn't overfit on train data by comparing the accuracies obtained on training data and validation data)**
+```{r}
+library(caret)
+set.seed(73)
+train_index <- createDataPartition(covid19_prediction_df$disease, p = 0.7, list = FALSE)
+
+covid19_prediction_df_training <- covid19_prediction_df[train_index, ]
+
+
+covid19_prediction_df_test <- covid19_prediction_df[-train_index, ]
+
+covid19_prediction_df_training$disease <- NULL
+covid19_prediction_df_test$disease <- NULL
+
+```
+
+
+#### Viewing the summary of the BASELINE MODEL to identify the importance of variables based on P-values and coeffecients
+**We can drop the columns which are insignificant and have high p-values. A high p-value means that the variable has no relationship with the target variable as we fail to reject the null hypothesis that the slope between the target variable and predictor variable is 0.**</br>
+**The base model with all the variables produced an adjusted R square of 28.4%**
+```{r}
+summary(lm(Infect_Prob ~Region+Gender+Married+Children+Occupation+Mode_transport+cases.1M+comorbidity+Age+Coma.score+Pulmonary.score+cardiological.pressure+Diuresis+Platelets+HBB+d.dimer+Heart.rate+HDL.cholesterol+Charlson.Index+Blood.Glucose+Insurance+salary+FT.month, data=covid19_prediction_df_training))
+```
+
+#### Evaluating the Revised model performance after dropping the insignificant variables with p-value > 0.05, which are Gender, Mode of Transport, cormobidity, age, pulmonary score, cardiological pressure, Diuresis, Heart.rate, Charlson.Index, Blood.Glucose, Insurance and FT.month
+**The adjusted R square increased by 0.04 percent**
+```{r}
+summary(lm(Infect_Prob ~Region+Married+Children+Occupation+cases.1M+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary, data=covid19_prediction_df_training))
+```
+
+#### Building the linear regression model with the above picked variables and evaluating model performance
+**The ridge method reduces the coefficients of the predictor variables with increase in lambda. That shrinking effect decreases the model flexibility and variance but increases bias. Ridge regression tries 20 different values for lambda as tunelength has been mentioned as 20 in the below code and it picks the best value of lambda based on Root Mean Sqaure Error (RMSE)that is a satisfying trade-off between bias and variance.**</br>
+**RMSE is the regression loss function which measures the difference between the actual value and the predicted value.**</br>
+**Rsquared is another model performance evaluation metric which measures the amount of variation in the dependent variable that can be explained by the variation in the independent variables.**</br>
+**5 fold cross validation was also performed to ensure that every section of the 5 folds is used for validation to control for overfitting**</br>
+**We can observe the RMSE and Rsquared value for each value of lambda from the below summary, and the model outputs the best choice of lambda from the values tested**
+```{r}
+library(caret)
+library(elasticnet)
+#covid19_linear_model <- train(Infect_Prob ~ Region+Married+Children+Occupation+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary,
+#               data = covid19_prediction_df_training,
+#               method = "ridge", 
+#               trControl = trainControl(method = "repeatedcv",   
+#                           number = 5,     # number of folds
+#                           repeats = 5),
+#               tuneLength = 20)  
+
+covid19_linear_model
+```
+
+#### From the below plot, we can see the importance of the variables for the linear regression model
+**Marital Status, Number of Children and Region are the top 3 most important variables in predicting the target variable for the linear regression model**
+```{r}
+ggplot(varImp(covid19_linear_model))
+```
+
+
+#### Using the built linear model to make predictions on the validation data
+```{r}
+#covid19_lm_predictions <- predict(covid19_linear_model, covid19_prediction_df_test)
+```
+
+
+#### The RMSE and R squared values of the linear model on the validation data are in line with the training data values. Hence we can be assured that the model is not overfitting.
+```{r}
+
+SSE = sum((covid19_prediction_df_test$Infect_Prob-covid19_lm_predictions)^2)    # sum of squared errors
+SST = sum((covid19_prediction_df_test$Infect_Prob - mean(covid19_prediction_df_training$Infect_Prob))^2) # total sum of squares, remember to use training data here
+R_square_lm = 1 - SSE/SST
+RMSE_lm = sqrt(SSE/length(covid19_lm_predictions))
+
+paste("The RMSE value of Linear Model on Validation data is:",RMSE_lm)
+paste("The R Square value of Linear Model on Validation data is:",R_square_lm)
+
+```
+
+**END OF LINEAR REGRESSION MODEL**
+
+### 2.2 Random Forest Regression Model
+#### Building a baseline Random Forest Regression model
+```{r}
+#rf_regression_bse_model <- train(Infect_Prob ~ Region+Married+Children+Occupation+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary,
+#               data = covid19_prediction_df_training,method='rf')
+
+```
+
+#### Performance summary of baseline Random Forest Regression model, we can see an improvement in RMSE over the linear regression model
+```{r}
+rf_regression_bse_model
+```
+
+#### Tuning hyperparameters to try and improve RMSE and RSquared value of the RF model by tuning number of features selected (mtry) hyperparameter. Also doing 5 fold cross validation, which is a technique used to control overfitting.
+**mtry is a hyperparameter that selects a number of features to be considred for splitting at every node of the decision tree. The selection of a limited number of features is a feature of Random Forest which helps to reduce the correlation between the trees.**</br>
+**From the below table, we can observe how the model performance evaluation metrics (RMSE, Rsquared & MAE) vary for each value of mtry. The value of mtry which produces the best result will be chosen as the final model**</br>
+**We can see that the model performance has improved in comparison to the baseline model, after tuning.**
+```{r}
+#rf_regression_tuned_model <- train(Infect_Prob ~ Region+Married+Children+Occupation+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary,
+#               data = covid19_prediction_df_training,method='rf',
+#               trControl = trainControl(method = "repeatedcv",   
+#                           number = 5,     # number of folds
+#                           repeats = 5),
+#               tuneLength = 20)
+rf_regression_tuned_model
+```
+
+#### Let us evaluate the performance of the tuned Random Forest Regression model on the validation dataset
+**The model performance on validation dataset is also inline with performance on training data and hence the model variance is minimum**
+```{r}
+#covid19_rf_predictions <- predict(rf_regression_tuned_model, covid19_prediction_df_test)
+SSE = sum((covid19_prediction_df_test$Infect_Prob-covid19_rf_predictions)^2)    # sum of squared errors
+SST = sum((covid19_prediction_df_test$Infect_Prob - mean(covid19_prediction_df_training$Infect_Prob))^2) # total sum of squares
+R_square_rf = 1 - SSE/SST
+RMSE_rf = sqrt(SSE/length(covid19_rf_predictions))
+
+paste("The RMSE value of Random Forest Model on Validation data is:",RMSE_rf)
+paste("The R Square value of Random Forest Model on Validation data is:",R_square_rf)
+
+```
+
+**END OF RANDOM FOREST REGRESSION MODEL**
+
+### 2.3 Artificial Neural Network with 2 hidden layers (ANN2)
+#### Next we can build a deep learning neural network model with 2 hidden layers to predict our target variable
+##### Creating DF with required variables for ANN2
+```{r}
+covid19_prediction_df_training_ann <- covid19_prediction_df_training[,c('Region','Married','Children','Occupation','Coma.score','Platelets','HBB','d.dimer','HDL.cholesterol','salary','Infect_Prob')]
+
+covid19_prediction_df_test_ann <- covid19_prediction_df_test[,c('Region','Married','Children','Occupation','Coma.score','Platelets','HBB','d.dimer','HDL.cholesterol','salary','Infect_Prob')]
+
+```
+
+#### Data PreProcessing, creating rec_obj
+**</b> step_center() to mean-center the data & step_scale() to scale the data**</br>
+**</b> The last step is to prepare the recipe with the prep() function**
+```{r}
+library(recipes)
+disease_rec_obj <- recipes::recipe(Infect_Prob~.,data = covid19_prediction_df_training_ann)%>%
+  recipes::step_dummy(all_nominal(), -all_outcomes()) %>%
+  recipes::step_center(Children,Coma.score,Platelets,HBB,d.dimer,HDL.cholesterol,salary,Infect_Prob)%>%
+  recipes::step_scale(Children,Coma.score,Platelets,HBB,d.dimer,HDL.cholesterol,salary,Infect_Prob)%>%
+  recipes::prep(data = covid19_prediction_df_training_ann)
+
+```
+
+
+
+#### Data PreProcessing: Creating Train and Test datasets and Train Test target variable Vectors
+**</b>Applying the “recipe” to train and test data sets with the bake() function which processes the data following our recipe steps**
+```{r}
+x_train_disease_pred_tbl <- recipes::bake(disease_rec_obj, new_data = covid19_prediction_df_training_ann)%>% select(-Infect_Prob)
+x_test_disease_pred_tbl <- recipes::bake(disease_rec_obj, new_data = covid19_prediction_df_test_ann)%>%select(-Infect_Prob)
+y_train_vec <- pull(covid19_prediction_df_training_ann, Infect_Prob)
+y_test_vec <- pull(covid19_prediction_df_test_ann, Infect_Prob)
+```
+
+
+
+#### Building neural network architecture with 2 hidden layers (ANN2)
+**</b> The number of nodes in the first hidden layer should be equal to the number of input attributes in the datatset, whereas the number of nodes in the second hidden layer can vary anywhere between 1 and two times of number of input attributes.**</br>
+**</b> Using the linear activation function after the hidden layers**</br>
+**</b>The Dropout layers are used to control overfitting by eliminating weights below a cutoff threshold in order to prevent low weights from overfitting the layers. Here we are removing weights below 10%.**</br>
+**</b> Using the mean absolute error loss function since it is a regression problem**</br>
+**</b>Written a function below, which returns a Neural Network with two hidden layers by taking in the optimizer as input parameter**
+```{r}
+
+library(keras)
+library(tensorflow)
+
+model_keras_ann2 <- function(opt) {
+ 
+model_keras_ann <- keras_model_sequential()
+model_keras_ann %>%
+  ## Hidden Layer 1
+  layer_dense(units = 21,
+    kernel_initializer = "uniform",
+    activation = "linear",
+    input_shape = ncol(x_train_disease_pred_tbl)) %>%
+  
+  ## Hidden Layer 2
+  layer_dense(units = 12,
+    kernel_initializer = "uniform",
+    activation = "linear") %>%
+  layer_dropout(rate = 0.1)%>%
+  
+  ## Output Layer
+  layer_dense(units = 1,
+    kernel_initializer = "uniform"
+    #activation = "identity"
+    ) %>%
+    compile(optimizer = opt,
+    loss = "mse",
+    metrics = c("mean_absolute_error")
+  )
+
+return(model_keras_ann)
+
+}
+```
+
+
+#### Fitting the Neural Network with 2 hidden layers onto the train data
+```{r}
+dl_model_keras_ann2 <- model_keras_ann2('adam')
+model_ann2_fit <- fit(verbose=0,
+  object = dl_model_keras_ann2,
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = 50,
+  epochs = 60,
+  validation_split = 0.30
+)
+```
+
+
+#### We can see how the mean absolute error and the MSE loss reduces with every epoch
+```{r}
+plot(model_ann2_fit)
+```
+
+
+**</b> Making Predictions on the split Test Data using the final ANN2 DL model built using the tibble function and yardstick library**</br>
+#### Evaluating the ANN2 model performance on the test dataset (Hold One out method), using the same set of metrics: R Square and RMSE
+```{r}
+
+library(yardstick)
+covid19_ann2_predictions <- dl_model_keras_ann2 %>%predict(x = as.matrix(x_test_disease_pred_tbl))%>% as.vector()
+
+SSE = sum((y_test_vec-covid19_ann2_predictions)^2)    # sum of squared errors
+SST = sum((y_test_vec - mean(y_train_vec))^2) # total sum of squares
+R_square_ann2 = 1 - SSE/SST
+RMSE_ann2 = sqrt(SSE/length(covid19_ann2_predictions))
+
+paste("The RMSE value of ANN2 Model on Validation data is:",RMSE_ann2)
+paste("The R Square value of ANN2 Model on Validation data is:",R_square_ann2)
+
+```
+
+**END OF ANN2 REGRESSION MODEL**
+
+#### Comparing the performance of the 3 regression models in terms of their RMSE and RSquared
+**Random Forest Regression model has the best performance with the lowest RMSE and the highest RSquare value**
+```{r}
+Regression_Model <- c("Linear Regression","Random Forest Regression","Artificial Neural Network 2 layers")
+RMSE <- c(RMSE_lm,RMSE_rf,RMSE_ann2)
+RSquare <- c(R_square_lm,R_square_rf,R_square_ann2)
+reg_model_comp_df <- data.frame(Regression_Model, RMSE, RSquare)
+reg_model_comp_df
+```
+
+
+
+## B. Converting the target variable into binary categorical to apply classification based learning algorithms to predict the binary target variable
+### Since sometimes we may be only interested just to find out if the person has the covid-19 infection or not and may not be interested in finding out the probability of a person having the infection.
+### The numeric continuous variable target variable can be made binary by considering all values < 50 as class '0' and values > 50 as class '1'.
+
+### Few of the best performing classification models are Gradient Boosting and Artificial Neural Network with 2 layers. Let us implement both these algorithms along with logistic regression.
+
+**Checking to ensure that there is not too much of a class imbalance problem. A very high class imbalance will require us to use Undersampling and Oversampling techniques to balance out the dataset, and moreover Accuracy will become an invlaid metric in such cases.**
+```{r}
+table(covid19_prediction_df$disease)
+```
+
+
+```{r}
+library(caret)
+set.seed(73)
+train_index <- createDataPartition(covid19_prediction_df$disease, p = 0.7, list = FALSE)
+
+covid19_prediction_df_training <- covid19_prediction_df[train_index, ]
+
+
+covid19_prediction_df_test <- covid19_prediction_df[-train_index, ]
+
+covid19_prediction_df_training$Infect_Prob <- NULL
+covid19_prediction_df_test$Infect_Prob <- NULL
+
+```
+
+### 2.4 Implementing the Elastic Net logistic regression model
+#### We can observe the accuracy of the logistic regression model for different values of alpha and lambda after tuning for 10 different values with 5 fold cross validation. The alpha and lambda which produces the best accuracy is chosen as the final model.
+#### Alpha and Lambda are the elastic net regularization parameters which help in controlling for overfitiing
+```{r}
+library(caret)
+library(elasticnet)
+library(glmnet)
+
+#covid19_model_logistic <- train(disease ~ Region+Married+Children+Occupation+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary,
+#                                data = covid19_prediction_df_training, method = "glmnet",family = "binomial",
+#                    tuneLength = 10,
+#                    trControl = trainControl(method = "repeatedcv",number = 5, repeats = 3))
+
+covid19_model_logistic
+```
+
+**Evaluating Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data. (Hold one out method to control for overfitting)**</br>
+**</b>After fine tuning the alpha and lambda elastic net regularization hyperparameters, the risk  of overfitting can be avoided**</br>
+**</b> Since the training and validation metric scores are in line, we can be assured that the model is producing low bias and low variance estimate**
+```{r}
+covid19_prediction_df_test$predicted_covid19_logistic <- predict(covid19_model_logistic, newdata = covid19_prediction_df_test)
+conf_matrix <- data.frame(table(covid19_prediction_df_test$disease,covid19_prediction_df_test$predicted_covid19_logistic)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_LR <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_LR <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_LR <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_LR <- (2*Precision_LR*Recall_LR)/(Precision_LR+Recall_LR)
+
+paste("Accuracy of best Logistic Algorithm in classifying Covid19 is :",Accuracy_LR)
+paste("Precision of Logistic Algorithm in classifying Covid19 is :",Precision_LR)
+paste("Recall of Logistic Algorithm in classifying Covid19 is :",Recall_LR)
+paste("F1 Score of Logistic Algorithm in classifying Covid19 is :",F1_score_LR)
+```
+
+#### ROC & AUROC for the best Logistic Regression Model
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing Logistic Regression model**
+```{r}
+logistic_pred_disease <- predict(covid19_model_logistic, newdata = covid19_prediction_df_test, na.action = na.omit, type = "prob")
+roc_curve <- roc(covid19_prediction_df_test$disease,logistic_pred_disease$`1`)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best Logistic model**
+```{r}
+auc_lr <- auc(roc_curve)
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+**END OF LOGISTIC REGRESSION**
+
+### 2.5 Implementing the Gradient Boosting Classification Algorithm
+
+```{r}
+#install.packages("gbm")
+library(gbm)
+```
+
+**</b> Running baseline model for Gradient Boosting Algorithm**</br>
+**From the below results we can observe the accuracies of the baseline model for each value of n.trees and interaction.depth. The combinations of depth and number of trees that produced the best accuracy was chosen as the final model**
+```{r} 
+#baselinemodel_gb <- train(disease ~ Region+Married+Children+Occupation+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary,
+#                                data = covid19_prediction_df_training, method = "gbm", verbose = 0)
+baselinemodel_gb
+```
+
+#### Performing Grid Search by tuning hyperparameters to maximize Accuracy
+**</b> The hyperparameters are interaction.depth (tree depth) which controls the complexity of the trees, n.trees to limit the number of iterations(trees), shrinkage which measures the learning rate and n.minobsinnode which denotes the number of rows in a node to begin splitting. For controlling overfitting we should limit the depth of the tree and increase the number of trees and also increase the minimum number of rows required in a node**</br>
+**</b>Increasing the tree depth may reduce the bias but can increase variance, whereas increasing the number of trees can reduce variance and increase bias.**</br>
+**</b> 3 Fold Cross Validation technique is also used to train the model on the training data**
+```{r}
+set.seed(188)
+#gbm_tuned <- train(disease ~ Region+Married+Children+Occupation+Coma.score+Platelets+HBB+d.dimer+HDL.cholesterol+salary,
+#                                data = covid19_prediction_df_training, 
+#                       tuneGrid = expand.grid(interaction.depth=c(1, 3, 5), n.trees = c(50,100,150,200),
+#                       shrinkage=c(0.01, 0.05,0.1),n.minobsinnode=c(5,10)), method = "gbm",
+#                       trControl = trainControl(method="repeatedcv", number=3, repeats = 3),
+#                       metric="Accuracy", verbose = 0)
+
+```
+
+*</b> From the below table we can see the training data Accuracies for different values of shrinkage, interaction depth, minobsinnode, number of trees.*</br>
+*</b>The model with the best training data accuracy is chosen as the final model*
+```{r}
+gbm_tuned
+```
+
+
+```{r}
+#predict_covid19_gb_tuned <- predict(gbm_tuned, newdata = covid19_prediction_df_test)
+```
+
+
+**Evaluating the Grdient Boosting tuned Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data.**</br>
+**</b> Since the accuracies of the training data is comparable to the validation data accuracies, we can be sure that the model is not overfitting on the training data**
+```{r}
+covid19_prediction_df_test$predict_covid19_gb <- predict_covid19_gb_tuned
+conf_matrix <- data.frame(table(covid19_prediction_df_test$disease,covid19_prediction_df_test$predict_covid19_gb)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_gb <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_gb <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_gb <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_gb <- (2*Precision_gb*Recall_gb)/(Precision_gb+Recall_gb)
+
+paste("Accuracy of tuned GB Algorithm in classifying covid19 is :",Accuracy_gb)
+paste("Precision of tuned GB Algorithm in classifying covid19 is :",Precision_gb)
+paste("Recall of tuned GB Algorithm in classifying covid19 is :",Recall_gb)
+paste("F1 Score of tuned GB Algorithm in classifying covid19 is :",F1_score_gb)
+```
+
+#### ROC & AUROC for the best Gradient Boost Model
+
+*Generated ROC curve and calculated Area Under Curve metric for the identified best performing Gradient Boosting Model*
+```{r}
+library(pROC)
+#gb_pred_disease <- predict(gbm_tuned, newdata = covid19_prediction_df_test, na.action = na.omit, type = "prob")
+roc_curve <- roc(covid19_prediction_df_test$disease,gb_pred_disease$`1`)
+plot(roc_curve)
+```
+
+
+**Obtained the area under the ROC curve for the best GB model**
+```{r}
+Auc_Gb <- auc(roc_curve)
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### From the below Variable Importance table, we can see that number of children, marital status and region are the most important attributes in determining if a person has the infection or not
+```{r}
+library(gbm)
+varImp(gbm_tuned)
+```
+
+
+**END OF BUILDING Gradient Boosting Model**
+
+### 2.6 Implementing Artificial Neural Network with 2 hidden layers for binary classification
+
+##### Creating DataFrame with required variables for ANN2
+```{r}
+covid19_prediction_df_training_ann <- covid19_prediction_df_training[,c('Region','Married','Children','Occupation','Coma.score','Platelets','HBB','d.dimer','HDL.cholesterol','salary','disease')]
+
+covid19_prediction_df_test_ann <- covid19_prediction_df_test[,c('Region','Married','Children','Occupation','Coma.score','Platelets','HBB','d.dimer','HDL.cholesterol','salary','disease')]
+
+```
+
+#### Data PreProcessing, creating rec_obj
+**</b> step_center() to mean-center the data & step_scale() to scale the data**</br>
+**</b> The last step is to prepare the recipe with the prep() function**
+```{r}
+library(recipes)
+disease_rec_obj <- recipes::recipe(disease~.,data = covid19_prediction_df_training_ann)%>%
+  recipes::step_dummy(all_nominal(), -all_outcomes()) %>%
+  recipes::step_center(Children,Coma.score,Platelets,HBB,d.dimer,HDL.cholesterol,salary)%>%
+  recipes::step_scale(Children,Coma.score,Platelets,HBB,d.dimer,HDL.cholesterol,salary)%>%
+  recipes::prep(data = covid19_prediction_df_training_ann)
+
+```
+
+
+
+#### Data PreProcessing: Creating Train and Test datasets and Train Test target variable Vectors
+**</b>Applying the “recipe” to train and test data sets with the bake() function which processes the data following our recipe steps**
+```{r}
+x_train_disease_pred_tbl <- recipes::bake(disease_rec_obj, new_data = covid19_prediction_df_training_ann)%>% select(-disease)
+x_test_disease_pred_tbl <- recipes::bake(disease_rec_obj, new_data = covid19_prediction_df_test_ann)%>%select(-disease)
+y_train_vec <- ifelse(pull(covid19_prediction_df_training_ann, disease) == "1",1,0)
+y_test_vec <- ifelse(pull(covid19_prediction_df_test_ann, disease) == "1",1,0)
+```
+
+
+
+#### Building neural network architecture with 2 hidden layers (ANN2)
+**</b> The number of nodes in the first hidden layer should be equal to the number of input attributes in the datatset, whereas the number of nodes in the second hidden layer can vary anywhere between 1 and two times of number of input attributes.**</br>
+**</b> Using the relu activation function after the hidden layers.**</br>
+**</b>The Dropout layers are used to control overfitting by eliminating weights below a cutoff threshold in order to prevent low weights from overfitting the layers. Here we are removing weights below 10%.**</br>
+**</b> Using the binary_crossentropy loss function since it is a binary classification problem.**</br>
+**</b>Written a function below, which returns a Neural Network with two hidden layers by taking in the optimizer as input parameter**
+```{r}
+
+library(keras)
+library(tensorflow)
+
+model_keras_ann2 <- function(opt) {
+ 
+model_keras_ann <- keras_model_sequential()
+model_keras_ann %>%
+  ## Hidden Layer 1
+  layer_dense(units = 21,
+    kernel_initializer = "uniform",
+    activation = "relu",
+    input_shape = ncol(x_train_disease_pred_tbl)) %>%
+  
+  ## Hidden Layer 2
+  layer_dense(units = 12,
+    kernel_initializer = "uniform",
+    activation = "relu") %>%
+  layer_dropout(rate = 0.1)%>%
+  
+  ## Output Layer
+  layer_dense(units = 1,
+    kernel_initializer = "uniform",
+    activation = "sigmoid"
+    ) %>%
+    compile(optimizer = opt,
+    loss = "binary_crossentropy",
+    metrics = c("accuracy")
+  )
+
+return(model_keras_ann)
+
+}
+```
+
+
+#### Fitting the Neural Network with 2 hidden layers onto the train data
+```{r}
+dl_model_keras_ann2 <- model_keras_ann2('adam')
+model_ann2_fit <- fit(verbose=0,
+  object = dl_model_keras_ann2,
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = 50,
+  epochs = 30,
+  validation_split = 0.30
+)
+```
+
+
+#### We can see how the accuracy and loss after every epoch and decide the required number of epochs based on the point where the curve flattens
+```{r}
+plot(model_ann2_fit)
+```
+
+
+
+**</b> Making Predictions on the split Test Data using the final ANN2 deep learning model built above using the tibble function and yardstick library**</br>
+**</b>Accuracy and Recall are the 2 most important metrics because Recall helps in minimizing the False Negatives which are highly undesirable when doing disease prediction**
+```{r}
+
+yhat_keras_class_vec <- predict_classes(object = dl_model_keras_ann2, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+yhat_keras_prob_vec <- predict_proba(object = dl_model_keras_ann2, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+estimates_keras_tbl <- tibble::tibble(
+  truth = as.factor(y_test_vec),
+  estimate = as.factor(yhat_keras_class_vec),
+  class_prob = yhat_keras_prob_vec
+)
+#estimates_keras_tbl
+
+```
+
+
+#### Evaluating the ANN2 model performance on the test dataset (Hold One out method), using the same set of metrics: Accuracy, Precision, Recall, F1 score and AUC score to evaluate the performance of the ANN2 Deep Learning model.
+**</b> Since the accuracy on the testing data is completely inline with the training accuracy we can be assured that the model is producing low bias and low variance estimate**
+```{r}
+library(yardstick)
+options(yardstick.event_first = F)
+ann2_accuracy <- estimates_keras_tbl %>% metrics(truth, estimate)
+ACCURACY_ann2<- ann2_accuracy$.estimate[1]
+
+ann2_auc <-estimates_keras_tbl %>% roc_auc(truth, class_prob)
+AUC_ann2<-ann2_auc$.estimate[1]
+
+ann2_precision <-estimates_keras_tbl %>% precision(truth, estimate)
+PRECISION_ann2 <- ann2_precision$.estimate[1]
+
+ann2_recall <-estimates_keras_tbl %>% recall(truth, estimate)
+RECALL_ann2<- ann2_recall$.estimate[1]
+
+ann2_f1 <-estimates_keras_tbl %>% f_meas(truth, estimate)
+F1_ann2 <- ann2_f1$.estimate[1]
+
+data.frame(ACCURACY_ann2,AUC_ann2,PRECISION_ann2,RECALL_ann2,F1_ann2)
+```
+
+
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing ANN0 DL model**
+```{r}
+
+roc_curve <- roc(y_test_vec,yhat_keras_prob_vec)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best ANN2 model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING ANN2 Deep Learning Model (algorithm number 2)
+
+### Model Performance Comparison
+#### Let us compare the performance of the Logistic Regression Model, the Gradient Boosting Model and the ANN2 Deep Learning model
+**We can see that the Artificial Neural Network with two hidden layers is producing the best performance, with the highest Accuracy, Recall and AUC score**
+```{r}
+
+Algorithm <- c('Logistic Regression','Gradient Boosting','Artificial Neural Network2')
+Accuracy <- c(Accuracy_LR,Accuracy_gb,ACCURACY_ann2)
+Precision <- c(Precision_LR,Precision_gb,PRECISION_ann2)
+Recall <- c(Recall_LR,Recall_gb,RECALL_ann2)
+F1 <- c(F1_score_LR,F1_score_gb, F1_ann2)
+AUC_score <- c(auc_lr,Auc_Gb,AUC_ann2)
+
+Classification_performance_eval_df <- data.frame(Algorithm,Accuracy,Precision,Recall,F1,AUC_score)
+Classification_performance_eval_df
+```
+
+## D. CONCLUSION
+**From the above model building and evaluation process were able to produce 3 best performing models for Regression and 3 for binary classification. The importance of tuning hyperparameters through a grid search to improve the model performance is very evident. Moreover, the importance of K fold cross validation and hold one out techniques to ensure that the model performs well not only on the training data but also on the validation data was also learnt through this process. From the two model performance summary tables for Regression and Classification, we can observe that the Ensemble learning models and the deep learning models are the best performing models which showcase the best performance.**
+
+### Time Series Extrapolation of Diuresis for every individual using Weighted Moving Average Extrapolation
+#### Reading the person level time series diuresis data
+```{r}
+diuresis_forecast_df <- read.csv("diuresis_forecast.csv")
+```
+
+#### The diuresis value has to be forecasted to the next date 27th March for every single individual. Hence we can create a new column in the dataframe  and call it forecasted value for 27th March 2020. 
+```{r}
+
+diuresis_forecast_df$X24.Mar.20 <- as.numeric(diuresis_forecast_df$X24.Mar.20)
+
+diuresis_forecast_df$X25.Mar.20 <- as.numeric(diuresis_forecast_df$X25.Mar.20)
+
+diuresis_forecast_df$X26.Mar.20 <- as.numeric(diuresis_forecast_df$X26.Mar.20)
+
+str(diuresis_forecast_df)
+
+```
+
+#### Weighted Moving Average Extrapolation technique to forecast diuresis to the next date. This technique assigns weights (w1, w2, w3....) to the past values and the future value is forecasted by taking the weighted sum of the past values. Usually the most recent values are given a higer weight because they are more important in comparison to the old values. The weights add up to 1.
+#### Our dataset has 7 past dates, and the future value can be obtained by taking the weighted sum of these past 7 values. We are going to assign the weights 0.6, 0.2, 0.1, 0.05, 0.03,0.01,0.01 respectively from the most recent value to the oldest value. These weights add up to 1. 
+*Calculating the forecasted value*
+
+```{r}
+diuresis_forecast_df$forecasted_27th <- (0.6*diuresis_forecast_df$X26.Mar.20) + (0.2*diuresis_forecast_df$X25.Mar.20) + (0.1*diuresis_forecast_df$X24.Mar.20) + (0.05*diuresis_forecast_df$X23.Mar.20) + (0.03*diuresis_forecast_df$X22.Mar.20) + (0.01*diuresis_forecast_df$X21.Mar.20) + (0.01*diuresis_forecast_df$X20.Mar.20)
+```
+
+
+#### Examining the Weighted Moving Average Extrapolation based forecasted values for first 10 rows. We can see the forecasted values in the last column.
+```{r}
+diuresis_forecast_df[1:10,]
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
