@@ -1,0 +1,1422 @@
+# IST 707 Data Analytics HOMEWORK 4: Disease Prediction for Patients using LR, DT, ANN0, ANN1 and ANN2
+## Submitted by BHAVISH KUMAR on April 26th 2020
+
+## A. Executive Summary:
+**</b> The purpose of this assignment is to use the Decision Tree, Logistic Regression classification models as well as the Artificial Neural Networks (Deep Learning) models that we have learned in the course to help solve the binary classification problem of predicting if a patient has the disease or not. The goal is to accurately predict if a given patient has the disease or not, thereby producing very good Accuracy, Recall and AUROC scores. Different Supervised Machine Learning algorithms were used to build models on the training dataset (dataset which contains the Target variable 'Disease' with its 2 classes) and these models were later used to make predictions on the new test dataset. The Machine Learning algorithms that were used to achieve this outcome were Decision Tree and Logistic Regression as well three Deep Learning algorithms with 0 hidden layers (ANN0), 1 hidden layer (ANN1) and 2 hidden layers (ANN2) were used. The goal of each model is to produce unbiased and low variance predictions which was achieved by extensive hyperparameter tuning done through a grid search. Several model evaluation techniques, which we will observe in the upcoming sections of the report were used to produce the best model.**
+
+## B. INTRODUCTION:
+**</b> In the below Analysis the following Learning Algorithms have been built:**
+**</b> i. Logistic Regression: This is a regression based algorithm that converts the regression output to a probability ranging between 0 & 1 by using the sigmoid activation function. The Elastic Net Regularization parameters such as alpha and lambda can be used to control for overfitting.**</br>
+**</b> ii. Decision Tree: This uses a tree-like model of decisions and their possible consequences. The tree contains a root node, internal nodes and leaf nodes along with splitting attributes that form the branches of the tree. The hyperparameters such as Max Depth, Minbucket, Minsplit etc. can be used to prune the tree in order to reduce variance without compromising on bias.**</br>
+**</b> iii. Artificial Neural Network 0 layers (ANN0): This is a deep learning neural network model consisting of 0 hidden layers. This network consists of directly the output layer followed by the activation function to transform the output. The neural network uses Gradient Descent to identify the weights for the variables which will minimize the loss function.**</br>
+**</b> iv. Artificial Neural Network 1 layer (ANN1): This is a feed forward Neural network containing 1 hidden layer followed by a relu activation function after the hidden layer and a an output layer followed by sigmoid activation function. The output layer consists of only 1 node and the sigmoid function in this case since this is a binary classification problem.**</br>
+**</b> v. Artificial Neural Network 2 layers (ANN2): This is a feed forward Neural network containing 2 hidden layers followed by a relu activation function after each of the hidden layer and a an output layer followed by sigmoid activation function. The output layer consists of only 1 node and the sigmoid function in this case since this is a binary classification problem. The number of nodes and the layer dropout rate are parameters that can be tuned in order to reduce the variance as well as the bias. The batch size and number of epochs are also two additional parameters which can be tuned to produce best results.**</br>
+**</b> The following techniques were used for model performance evaluation:**</br>
+**</b> K fold Cross Validation was done while training Logistic Regression & Decision Tree models on train data to control for overfitting, so that the model is built by ensuring that it performs well not just on train data but also on validation data which it has not seen before. Holdout method was also used where 70% of the data was used to train the model using K fold Cross Validation and the remaining 30% was used to measure the model performance on the data that it has not seen before. The model performance has been measured by using Accuracy, Precison, Recall, F1 score, ROC curve and Area Under ROC curve metrics.**
+
+## C. Body of the Report:
+
+#### Reading the Training data csv and storing it into a dataframe
+```{r}
+setwd("D:/SYR ADS/Sem 2/IST_707_Data_Analytics/HW4")
+getwd
+disease_prediction_training <- read.csv("Disease Prediction Training.csv")
+```
+
+
+*VIEWING THE STRUCTURE and SUMMARY STATISTICS of the Data and checking for missing values*
+```{r}
+str(disease_prediction_training)
+summary(disease_prediction_training)
+```
+
+## SECTION 1: DATA PREPARATION & Exploratory Data Analysis
+
+### 1. Identifying the Data Quality Issues:
+**</b> As we can see from the above summary that the data has no missing values and hence NA imputation is not required**</br>
+**</b> However, we can observe issues with 2 columns Low Blood Pressure and High Blood Pressure.**</br>
+**</b>From the structure and summary of the data we can observe that the Min and Max values of the columns Low Blood Pressure and High Blood Pressure are not practically possible values and hence they are noise/outliers which need to be treated. Hence these columns need to be winsorized.**</br>
+**</b> Winsorization is a data treatment process where the extreme outlier values are replaced with less extreme values which are practically possible**
+```{r}
+quantile(disease_prediction_training$Low.Blood.Pressure,c(0.001))
+quantile(disease_prediction_training$Low.Blood.Pressure,c(0.986))
+```
+
+**</b>From the above 0.1 & 98.6 percentile values of low BP column we can observe that the possible values for the min & max of low BP (diastolic BP) fall in the range of 45 to 140 and hence any value that is less than 45 is replaced with 45 and any value greater than 140 is replaced with 140**
+
+```{r}
+disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure<quantile(disease_prediction_training$Low.Blood.Pressure,c(0.001))] <- quantile(disease_prediction_training$Low.Blood.Pressure,c(0.001))
+
+disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>quantile(disease_prediction_training$Low.Blood.Pressure,c(0.986))] <- quantile(disease_prediction_training$Low.Blood.Pressure,c(0.986))
+```
+
+**</b>Verifying that the Min & Max values of Low Blood Pressure (Diastolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_training$Low.Blood.Pressure)
+```
+
+*</br> The high Blood Pressure column also needs to winsorized to ensure that the values fall in the practically permissible range and outliers are eliminated*
+```{r}
+quantile(disease_prediction_training$High.Blood.Pressure,c(0.003))
+quantile(disease_prediction_training$High.Blood.Pressure,c(0.998))
+```
+
+**</b>From the above 0.3 & 99.8 percentile values of High BP column we can observe that the possible values for the min & max of High BP (Systolic BP) fall in the range of 70 to 200 and hence any value that is less than 70 is replaced with 70 and any value greater than 200 is replaced with 200**
+```{r}
+disease_prediction_training$High.Blood.Pressure[disease_prediction_training$High.Blood.Pressure<quantile(disease_prediction_training$High.Blood.Pressure,c(0.003))] <- quantile(disease_prediction_training$High.Blood.Pressure,c(0.003))
+
+disease_prediction_training$High.Blood.Pressure[disease_prediction_training$High.Blood.Pressure>quantile(disease_prediction_training$High.Blood.Pressure,c(0.998))] <- quantile(disease_prediction_training$High.Blood.Pressure,c(0.998))
+```
+
+**</b>Verifying that the Min & Max values of High Blood Pressure (Systolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_training$High.Blood.Pressure)
+```
+
+*</b> There are 245 instances where Low BP is > high BP even after winsorizing which needs to treated by swapping the values*
+```{r}
+length(disease_prediction_training[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure,1])
+```
+
+*</b> Swapping the values wherever Low BP > High BP which is not permissible*
+```{r}
+low_bp_values <- disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure]
+
+high_bp_values <- disease_prediction_training$High.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure]
+
+disease_prediction_training$Low.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure] <- high_bp_values
+
+disease_prediction_training$High.Blood.Pressure[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure] <- low_bp_values
+
+```
+
+**</b> Verifying that there are no instances with low bp values > high bp values**
+```{r}
+length(disease_prediction_training[disease_prediction_training$Low.Blood.Pressure>disease_prediction_training$High.Blood.Pressure,1])
+```
+
+**</b> The weight column has very low values, two of which are as low as 10Kg and 11Kg, which are practically very unlikely and hence they need to be winsorized**
+```{r}
+quantile(disease_prediction_training$Weight,c(0.0001))
+```
+
+**</b>Any value that is less than 0.01 percentile value, are replaced with the 0.01 percentile value = 28.9**
+```{r}
+disease_prediction_training$Weight[disease_prediction_training$Weight<quantile(disease_prediction_training$Weight,c(0.0001))] <- quantile(disease_prediction_training$Weight,c(0.0001))
+```
+
+**</b>Verifying that the Min & Max values of Weight are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_training$Weight)
+```
+
+### 2. EXPLORATORY DATA ANALYSIS:
+
+#### 2.1. Bi Variate Analysis between Age and Disease column
+**</b> Creating Age Groups column based on quartiles for EDA purpose**</br>
+**</b>We assume that the number of people with the disease is higher for higher age groups, which we can verify by producing a bar graph**
+```{r}
+
+library(stringr)
+disease_prediction_training$age_groups <-cut(disease_prediction_training$Age, breaks = c(quantile(disease_prediction_training$Age, probs = c(0,0.25,0.5,0.75,1))),
+     labels = c(str_c(quantile(disease_prediction_training$Age,probs = 0),quantile(disease_prediction_training$Age,probs = 0.25),sep = " to "),str_c(quantile(disease_prediction_training$Age,probs = 0.25),quantile(disease_prediction_training$Age,probs = 0.5),sep = " to "),str_c(quantile(disease_prediction_training$Age,probs = 0.5),quantile(disease_prediction_training$Age,probs = 0.75),sep = " to "),str_c(quantile(disease_prediction_training$Age,probs = 0.75),quantile(disease_prediction_training$Age,probs = 1),sep = " to ")), right = FALSE, include.lowest=TRUE)
+disease_prediction_training$age_groups<-as.factor(disease_prediction_training$age_groups)
+#unique(disease_prediction_training$age_groups)
+```
+
+
+**</b> From the below bar group our assumption has been verified, as we can observe that the number of people with the disease increases as we go up the age groups and the older age groups have the highest number of patients with the disease**
+```{r}
+library(tidyverse)
+library(ggplot2)
+disease_count_by_ageGroups <- disease_prediction_training %>%
+      group_by(age_groups)%>%
+      summarise(sum(Disease))
+colnames(disease_count_by_ageGroups) <- c('age_groups','NO_ppl_with_disease')
+age_group_disease_plot <- ggplot(disease_count_by_ageGroups,aes(age_groups,NO_ppl_with_disease))+geom_bar(stat = "identity")+
+             xlab("Age Groups")+ ylab("Number of people with disease")+ ggtitle("Age Group VS count of patients")
+age_group_disease_plot
+```
+
+#### 2.2. Bi Variate Analysis between Height+Weight (BMI) and Disease column
+
+**</b>Creating a new Body Mass Index (BMI) column by combining Height and Weight column, where BMI = (Weight in Kg)/(Height in meteres)^2**</br>
+**</b> The BMI column can be used to classify the patients as Underweight, Healthy, Overweight and Obese**</br>
+**</b> Underwight if BMI < 18.5; Healthy if BMI between 18.5 and 24.9; Overweight if BMI between 25 and 29.9; Obese if BMI greater than 30**</br>
+```{r}
+disease_prediction_training$bmi <- disease_prediction_training$Weight/((disease_prediction_training$Height/100)*(disease_prediction_training$Height/100))
+disease_prediction_training$bmi_groups <-cut(disease_prediction_training$bmi, breaks = c(0,18.5,24.9,29.9,Inf), labels = c('Underweight','Healthy','Overweight','Obese'))
+
+```
+
+**</b> We can observe that number of people with the disease is more for Overweight and Obese BMI groups in comparison to Healthy and Underweight BMI groups**
+```{r}
+disease_count_by_bmi_groups <- disease_prediction_training %>%
+      group_by(bmi_groups)%>%
+      summarise(sum(Disease))
+colnames(disease_count_by_bmi_groups) <- c('bmi_groups','NO_ppl_with_disease')
+
+bmi_disease_plot <- ggplot(disease_count_by_bmi_groups,aes(bmi_groups,NO_ppl_with_disease))+geom_bar(stat = "identity")+
+             xlab("bmi_groups")+ ylab("Number of people with disease")+ ggtitle("BMI groups VS count of patients")
+bmi_disease_plot
+```
+
+
+
+#### 2.4. Bi Variate Analysis between Cholestrol and Disease column
+**</b> We can observe that the percentage of people with the disease is much higher amongst 'high' and 'too high' Cholesterol groups of people**
+```{r}
+disease_count_by_cholestrol <- disease_prediction_training %>%
+      group_by(Cholesterol,as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_cholestrol) <- c('Cholesterol','Disease','NO_ppl')
+
+Cholesterol_disease_plot <- ggplot(disease_count_by_cholestrol,aes(fill = Disease,x=Cholesterol,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Cholesterol")+ ylab("Number of people with/without disease")+ ggtitle("Cholesterol VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Cholesterol_disease_plot
+
+```
+
+
+
+#### 2.5. Bi Variate Analysis between Glucose and Disease column
+**</b> We can observe that the percentage of people with the disease is higher amongst 'high' and 'too high' Glucose groups of people**
+```{r}
+disease_count_by_Glucose <- disease_prediction_training %>%
+      group_by(Glucose,as.factor(Disease))%>%
+      summarise(n())
+colnames(disease_count_by_Glucose) <- c('Glucose','Disease','NO_ppl')
+
+Glucose_disease_plot <- ggplot(disease_count_by_Glucose,aes(fill = Disease,x=Glucose,y=NO_ppl))+geom_bar(position="stack",stat = "identity")+
+             xlab("Glucose")+ ylab("Number of people with/without disease")+ ggtitle("Glucose VS proportion of people with disease")+ geom_text(aes(label = NO_ppl),position="stack",size = 4)
+Glucose_disease_plot
+```
+
+
+#### 2.11. Uni Variate Analysis - Histogram of Numeric Variables to view the distribution of the numeric variables
+**</b> The Weight column is mostly normally distributed with a slight right skew resulting in mean>median**</br>
+**</b> The Low.Blood.Pressure column is mostly normally distributed with a slight right skew resulting in mean>median**</br>
+**</b> The High.Blood.Pressure column is mostly normally distributed with a slight right skew resulting in mean>median**</br>
+**</b> The Height column distribution is mostly normally distributed**
+```{r}
+library(gridExtra)
+hist_plot <- function(data_in, i) 
+  {
+  data <- data.frame(x=data_in[[i]])
+  p <- ggplot(data=data, aes(data[,1])) + 
+    geom_histogram(bins = 30, col="red", aes(fill=..count..)) +
+    xlab(colnames(data_in)[i]) +
+    scale_fill_gradient("Count", low="green", high="red")
+  return (p)
+}
+mygrid2 <- list()
+for (i in 1:length(disease_prediction_training[,c('Weight','Low.Blood.Pressure','High.Blood.Pressure','Height')])){
+  myplot2 <- hist_plot(disease_prediction_training[,c('Weight','Low.Blood.Pressure','High.Blood.Pressure','Height')], i)
+  mygrid2 <- c(mygrid2, list(myplot2)) 
+}
+do.call("grid.arrange", c(mygrid2, ncol=2))
+```
+
+
+### 3. DATA PREPARATION for Logistic & ANN :
+#### For Logistic and ANN we require all the categorical variables to be converted to Numeric by performing one hot encoding and also all the numeric variables have to be normalized so that all the columns have values in the range of 0 to 1.
+**</b> Creating Dummy Variables out of all categorical variables by performing one hot encoding and normalizing all other numeric columns using Min Max scaler**
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+library(fastDummies)
+disease_prediction_training_df <- disease_prediction_training
+disease_prediction_training_df<-fastDummies::dummy_cols(disease_prediction_training_df,select_columns=c('Gender','Cholesterol','Glucose'))
+
+disease_prediction_training_df$Age <- normalize(disease_prediction_training_df$Age)
+disease_prediction_training_df$Height <- normalize(disease_prediction_training_df$Height)
+disease_prediction_training_df$Weight <- normalize(disease_prediction_training_df$Weight)
+disease_prediction_training_df$bmi <- normalize(disease_prediction_training_df$bmi)
+disease_prediction_training_df$Low.Blood.Pressure <- normalize(disease_prediction_training_df$Low.Blood.Pressure)
+disease_prediction_training_df$High.Blood.Pressure <- normalize(disease_prediction_training_df$High.Blood.Pressure)
+```
+
+**</b>Getting rid of non numeric columns**
+```{r}
+disease_prediction_training_df$Gender <- NULL
+disease_prediction_training_df$Cholesterol <- NULL
+disease_prediction_training_df$Glucose <- NULL
+disease_prediction_training_df$age_groups <- NULL
+
+disease_prediction_training_df$bmi_groups <- NULL
+disease_prediction_training_df$Gender_male <- NULL
+disease_prediction_training_df$Disease <- as.factor(disease_prediction_training_df$Disease)
+
+i <- sapply(disease_prediction_training_df, is.integer)
+disease_prediction_training_df[,i] <- lapply(disease_prediction_training_df[i], as.factor)
+
+```
+
+
+## SECTION 2: BUILD, TUNE & EVALUATE various ML ALGORITHMS
+### 2.1 Logistic Regression
+
+**</b>Generating Training and Validation datasets for KNN algorithm with 70% & 30% splits respectively. (Hold one Out method to ensure that the model built doesn't overfit on train data by comparing the accuracies obtained on training data and validation data)**
+```{r}
+library(caret)
+set.seed(73)
+train_index <- createDataPartition(disease_prediction_training_df$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_training_df_tr_split <- disease_prediction_training_df[train_index, ]
+
+
+disease_prediction_training_df_test_split <- disease_prediction_training_df[-train_index, ]
+
+disease_prediction_training_df_tr_split$Height <- NULL
+disease_prediction_training_df_tr_split$Weight <- NULL
+disease_prediction_training_df_test_split$Height <- NULL
+disease_prediction_training_df_test_split$Weight <- NULL
+```
+
+
+**BUILDING BASELINE MODEL for Logistic Regression**
+```{r}
+library(glmnet)
+baseline_model_logistic <- train(Disease ~ ., data = disease_prediction_training_df_tr_split, method = "glmnet", family = "binomial")
+```
+
+```{r}
+predict_disease_logistic <- predict(baseline_model_logistic, newdata = disease_prediction_training_df_test_split)
+```
+
+**The baseline model produced the following accuracies on the training data for different values of elastic net regularization parameters**
+```{r}
+baseline_model_logistic
+```
+
+
+**</b> The baseline model produced the below shown accuracy and sensitivity on validation data which it has not seen before.**
+```{r}
+confusionMatrix(predict_disease_logistic,disease_prediction_training_df_test_split$Disease, positive = "1")
+```
+
+#### Fine tuning the hyperparameter 'alpha' & 'lambda' for producing the best possible accuracy on validation data.
+**</b>The Hyperparameter 'alpha' in Logistic algorithm denotes the balance between L1 & L2 regularization, whereas lambda is shrinkage parameter which denotes the strength of regularization**</br>
+**</b> alpha & lambda are the elastic net regularization parameters of a logistic regression model and are used to control for overfitting by reducing the coefficients of the features as these parameters are added to the Loss function in order to reduce the coefficients of the features which will in turn reduce overfitting**</br>
+**</b>Fine tuning the model to produce maximum accuracy and using 5 fold Cross Validation to train the model by controlling for overfitting**
+```{r}
+
+tuned_model_logistic <- train(Disease ~ ., data = disease_prediction_training_df_tr_split, method = "glmnet",family = "binomial",
+                    tuneLength = 15,
+                    trControl = trainControl(method = "repeatedcv",
+                                             number = 5, repeats = 3))
+```
+
+
+**</b> From the below table summarizing the best performing models and their corresponding accuracies we can see the accuracies for different values of elastic net regularization parameters alpha and lambda**
+```{r}
+print(tuned_model_logistic)
+```
+
+**</b>Obtaining Predicted values for disease on validation data using the fine tuned Logistic model**
+```{r}
+predict_disease_tuned_logistic <- predict(tuned_model_logistic, newdata = disease_prediction_training_df_test_split)
+```
+
+**Evaluating Model Performance by calculating Accuracy Precision and Recall on the classification done on the Validation Data. (Hold one out method to control for overfitting)**</br>
+**</b>After fine tuning the alpha and lambda elastic net regularization hyperparameters, the risk  of overfitting can be avoided**</br>
+**</b> Since the training and validation metric scores are in line, we can be assured that the model is producing low bias and low variance estimate**
+```{r}
+disease_prediction_training_df_test_split$predicted_disease_logistic <- predict_disease_tuned_logistic
+conf_matrix <- data.frame(table(disease_prediction_training_df_test_split$Disease,disease_prediction_training_df_test_split$predicted_disease_logistic)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of best Logistic Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of Logistic Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of Logistic Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of Logistic Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### ROC & AUROC for the best Logistic Regression Model
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing Logistic Regression model**
+```{r}
+logistic_pred_disease <- predict(tuned_model_logistic, newdata = disease_prediction_training_df_test_split, na.action = na.omit, type = "prob")
+roc_curve <- roc(disease_prediction_training_df_test_split$Disease,logistic_pred_disease$`1`)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best Logistic model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING LOGISTIC Model (ML algorithm number 1)
+
+### 2.2 Artificial Neural Network - 0 layers (ANN0)
+*</b> Data Splitting*
+```{r}
+library(rsample)
+
+
+train_test_split <- initial_split(disease_prediction_training_df, prop = 0.8)
+
+disease_prediction_train_df_spit <- training(train_test_split)
+disease_prediction_test_df_spit <- testing(train_test_split)
+
+i <- sapply(disease_prediction_train_df_spit, is.factor)
+disease_prediction_train_df_spit[,i] <- lapply(disease_prediction_train_df_spit[i], as.character)
+
+j <- sapply(disease_prediction_train_df_spit, is.character)
+disease_prediction_train_df_spit[,j] <- lapply(disease_prediction_train_df_spit[j], as.integer)
+
+i <- sapply(disease_prediction_test_df_spit, is.factor)
+disease_prediction_test_df_spit[,i] <- lapply(disease_prediction_test_df_spit[i], as.character)
+
+j <- sapply(disease_prediction_test_df_spit, is.character)
+disease_prediction_test_df_spit[,j] <- lapply(disease_prediction_test_df_spit[j], as.integer)
+
+```
+
+
+
+#### Data PreProcessing, creating rec_obj
+**</b> step_center() to mean-center the data & step_scale() to scale the data**</br>
+**</b> The last step is to prepare the recipe with the prep() function**
+```{r}
+#library(recipes)
+disease_rec_obj <- recipes::recipe(Disease~.,data = disease_prediction_train_df_spit)%>%
+  
+  recipes::step_center(Age,Height,Weight,High.Blood.Pressure,Low.Blood.Pressure,bmi)%>%
+  recipes::step_scale(Age,Height,Weight,High.Blood.Pressure,Low.Blood.Pressure,bmi)%>%
+  recipes::prep(data = disease_prediction_train_df_spit)
+
+```
+
+#### Data PreProcessing: Creating Train and Test datasets and Train Test target variable Vectors
+**</b>Applying the “recipe” to train and test data sets with the bake() function which processes the data following our recipe steps**
+```{r}
+x_train_disease_pred_tbl <- recipes::bake(disease_rec_obj, new_data = disease_prediction_train_df_spit)%>% select(-Disease)
+x_test_disease_pred_tbl <- recipes::bake(disease_rec_obj, new_data = disease_prediction_test_df_spit)%>%select(-Disease)
+y_train_vec <- ifelse(pull(disease_prediction_train_df_spit, Disease) == "1",1,0)
+y_test_vec <- ifelse(pull(disease_prediction_test_df_spit, Disease) == "1",1,0)
+str(x_train_disease_pred_tbl)
+```
+
+
+```{r}
+#use_condaenv("r-tensorflow")
+
+#install_tensorflow(package_url = "https://pypi.python.org/packages/b8/d6/af3d52dd52150ec4a6ceb7788bfeb2f62ecb6aa2d1172211c4db39b3#49a2/tensorflow-1.3.0rc0-cp27-cp27mu-manylinux1_x86_64.whl#md5=1cf77a2360ae2e38dd3578618eacc03b")
+
+```
+
+#### Building Deep Learning Models
+#### Building ANN with 0 hidden layers(ANN0)
+**</b> The ANN0 has no hidden layers and only has one output layer.**</br>
+**</b> The output layer has one node as we are solving a binary classification problem and uses the sigmoid function to produce the output between 0 and 1**</br>
+**</b> Using the "binary_crossentropy" loss function since this is a binary classification problem, and the goal of the 0 hidden layer ANN0 model is to minimize the binary_crossentropy loss through Gradient Descent**</br>
+**</b> Also writing a function below, which takes in the 'optimizer' as the input parameter and returns the 0 layer ANN architecture as output. We will comoare the performance with both ADAM & SGD optimizers**
+```{r}
+
+library(keras)
+library(tensorflow)
+
+model_keras_ann0 <- function(opt) {
+  
+  model_keras_ann <- keras_model_sequential()
+model_keras_ann %>%
+  layer_dense(units = 1,
+    kernel_initializer = "uniform",
+    activation = "sigmoid") %>%
+    compile(optimizer = opt,
+    loss = "binary_crossentropy",
+    metrics = c("accuracy")
+  )
+  return (model_keras_ann)
+}
+
+```
+
+
+#### Fitting the Neural Network with 0 layers onto the train data using "ADAM" optimizer
+```{r}
+
+model_ann0_fit <- fit(verbose=0,
+  object = model_keras_ann0("adam"),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = 200,
+  epochs = 50,
+  validation_split = 0.30
+)
+```
+
+#### From the below plot we can observe how training & validation accuracies as well as losses vary with every epoch.
+**</b> The point where the validation accuracy & loss curve begins to flatten will be the point where we can stop training the neural network**
+```{r}
+plot(model_ann0_fit)
+```
+
+#### Assesing the model performance using Stochastic Gradient Descent optimization algorithm 
+
+#### Fitting the Neural Network with 0 layers onto the train data using SGD optimizer
+```{r}
+model_ann0_sgdfit <- fit(verbose=0,
+  object = model_keras_ann0("SGD"),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = 200,
+  epochs = 50,
+  validation_split = 0.30
+)
+```
+
+#### From the below plot we can observe how the training and validation accuracies & losses vary after every epoch
+```{r}
+plot(model_ann0_sgdfit)
+```
+
+**</b>We can observe that there is not much significant difference in performance between SGD & ADAM optimizers (The training and validation accuracies are in line for both ADAM & SGD optimizers), hence going ahead with ADAM, as it is marginally better than SGD**
+```{r}
+paste("MODEL PERFORMANCE with SGD optimizer",model_ann0_sgdfit)
+paste("MODEL PERFORMANCE with ADAM optimizer",model_ann0_fit)
+```
+
+#### Tuning the number of epochs and batch size parameters by calling the model_keras_ann0 function written above which returns a 0 layer ANN0 network in every iteration of the loop. Seeing which batch size & epochs combination produces the best validation accuracy using ADAM optimizer network
+**</b> The number of epochs and batch size should be chosen in a way that both training and validation accuracies are high thus ensuring that the model doesn't overfit by producing a high training accuracy and low validation accuracy**
+```{r}
+batch_size = c(50,100,150,200)
+epochs = c(10,15,20,40,60,100)
+model_ann0_tuned_fit <- c(0)
+for (i in batch_size) {
+  for (j in epochs) {
+   
+    model_fit <- fit(verbose=0,
+  object = model_keras_ann0('adam'),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = i,
+  epochs = j,
+  validation_split = 0.30
+) 
+  model_ann0_tuned_fit <- c(model_ann0_tuned_fit,model_fit)  
+  }
+}
+```
+
+**</b> Storing the training and validation accuracies for different batch size and epoch values to compare the accuracies for each combination**
+```{r}
+batch_sizes <- c()
+epochs_run <- c()
+validation_accuracies <- c()
+training_accuracies <- c()
+for (i in seq(2,48,2))
+{
+  batch_sizes <- c(batch_sizes,model_ann0_tuned_fit[i]$params$batch_size)
+  epochs_run <- c(epochs_run,model_ann0_tuned_fit[i]$params$epochs)
+}
+
+for (i in seq(3,49,2)) {
+  validation_accuracies <- c(validation_accuracies,tail(model_ann0_tuned_fit[i]$metrics$val_accuracy,n=1))
+  training_accuracies <- c(training_accuracies, tail(model_ann0_tuned_fit[i]$metrics$accuracy,n=1))
+}
+```
+
+#### Table summarizing the model performances and their corresponding batch size and epoch hyperparameters
+**</b> The batch_size values, epochs values and their corresponding training accuracy as well as validation accuracy can be identified from the below table**
+```{r}
+performance_summary_df <- data.frame(batch_sizes,epochs_run,training_accuracies,validation_accuracies)
+performance_summary_df
+```
+
+#### Identifying the number of Epochs and Batch Size which produced the maximum validation accuracy. 
+```{r}
+performance_summary_df$epochs_run[which.max(performance_summary_df$validation_accuracies)]
+performance_summary_df$batch_sizes[which.max(performance_summary_df$validation_accuracies)]
+```
+
+#### Hence going ahead with the batch size and epochs that produced the maximum validation accuracy to fit the final ANN0 deep learning model. When the validation accuracy is also as high as training accuracy, we can be assured that the model will produce low bias and low variance estimates. 
+```{r}
+
+dl_model_keras_ann0 <- model_keras_ann0('adam')
+model_ann0_fit <- fit(verbose=0,
+  object = dl_model_keras_ann0,
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = performance_summary_df$batch_sizes[which.max(performance_summary_df$validation_accuracies)],
+  epochs = performance_summary_df$epochs_run[which.max(performance_summary_df$validation_accuracies)],
+  validation_split = 0.30
+)
+
+```
+
+**</b> Making Predictions on the split Test Data using the final ANN0 deep learning model built above using the tibble function and yardstick library**</br>
+**</b>Accuracy and Recall are the 2 most important metrics because Recall helps in minimizing the False Negatives which are highly undesirable when doing disease prediction**
+```{r}
+
+yhat_keras_class_vec <- predict_classes(object = dl_model_keras_ann0, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+yhat_keras_prob_vec <- predict_proba(object = dl_model_keras_ann0, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+estimates_keras_tbl <- tibble::tibble(
+  truth = as.factor(y_test_vec),
+  estimate = as.factor(yhat_keras_class_vec),
+  class_prob = yhat_keras_prob_vec
+)
+#estimates_keras_tbl
+
+```
+
+
+#### Evaluating the ANN0 model performance on the test dataset (Hold One out method), using the same set of metrics: Accuracy, Precision, Recall, F1 score and AUC score to evaluate the performance of the ANN0 Deep Learning model
+**</b> Since the accuracy on the testing data is completely inline with the training accuracy we can be assured that the model is producing low bias and low variance estimate**
+```{r}
+library(yardstick)
+options(yardstick.event_first = F)
+ann0_accuracy <- estimates_keras_tbl %>% metrics(truth, estimate)
+ACCURACY<- ann0_accuracy$.estimate[1]
+
+ann0_auc <-estimates_keras_tbl %>% roc_auc(truth, class_prob)
+AUC<-ann0_auc$.estimate[1]
+
+ann0_precision <-estimates_keras_tbl %>% precision(truth, estimate)
+PRECISION <- ann0_precision$.estimate[1]
+
+ann0_recall <-estimates_keras_tbl %>% recall(truth, estimate)
+RECALL<- ann0_recall$.estimate[1]
+
+ann0_f1 <-estimates_keras_tbl %>% f_meas(truth, estimate)
+F1 <- ann0_f1$.estimate[1]
+
+data.frame(ACCURACY,AUC,PRECISION,RECALL,F1)
+```
+
+
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing ANN0 DL model**
+```{r}
+
+roc_curve <- roc(y_test_vec,yhat_keras_prob_vec)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best ANN0 model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING ANN0 Deep Learning Model (algorithm number 2)
+
+### Comparing preformances of Linear SVM, Logistic Regression and ANN0 (Perceptron with 0 hidden layers)
+```{r}
+## LOGISTIC REGRESSION
+disease_prediction_training_df_test_split$predicted_disease_logistic <- predict_disease_tuned_logistic
+conf_matrix <- data.frame(table(disease_prediction_training_df_test_split$Disease,disease_prediction_training_df_test_split$predicted_disease_logistic)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+Accuracy_Logistic <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_Logistic <- conf_matrix$Count[conf_matrix$`Actual class`== 1 & conf_matrix$`Predicted Class`== 1]/sum(conf_matrix$Count[conf_matrix$`Predicted Class`==1])
+Recall_Logistic <- conf_matrix$Count[conf_matrix$`Actual class`==1 & conf_matrix$`Predicted Class`==1]/sum(conf_matrix$Count[conf_matrix$`Actual class`==1])
+F1_score_Logistic <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+logistic_pred_disease <- predict(tuned_model_logistic, newdata = disease_prediction_training_df_test_split, na.action = na.omit, type = "prob")
+roc_curve_logistic <- roc(disease_prediction_training_df_test_split$Disease,logistic_pred_disease$`1`)
+auc_logistic <- auc(roc_curve_logistic)
+
+## PERFORMANCE COMPARISON
+ALGORITHMs <- c('LOGISTIC REGRESSION','ANN0','LINEAR SVM')
+ACCURACIES <- c(Accuracy_Logistic,ACCURACY,0.7288)
+PRECISIONs <- c(Precision_Logistic,PRECISION,0.7988)
+RECALLs <- c(Recall_Logistic,RECALL,0.61178)
+F1_scores <- c(F1_score_Logistic,F1,0.72558)
+
+data.frame(ALGORITHMs,ACCURACIES,PRECISIONs,RECALLs,F1_scores)
+
+```
+
+#### Discussion on comparison of Linear SVM, Logistic Regression and ANN0 (Perceptron with 0 hidden layers)
+**</b> The performances of Logistic Regression, Linear SVM and single layer peceptron (ANN0) are very much comparable because all the algorithms work on the concept of dividing the data points by constructing a linear hyperplane that separates the data into 2 classes. The single layer perceptron is also a linear combination of predictor variables (weighted sum of predictors) just like logistic regression, because of which both these algorithms construct a linear hyperplane seperating the data points. Also linear SVM works on the exact same principle of constructing a linear hyperplane seperating the data points, similar to logistic regression and ANN0. Moreover, the method of obtaining target variable probabilities is same in Logistic Regression and ANN0, both these methods start of by taking a weighted sum (linear combination) of predictor variables and then apply the sigmoid function to supress the output between 0 and 1. Hence all the 3 algorithms have similar performance.**
+
+
+### 2.3 Artificial Neural Network - 1 hidden layer (ANN1)
+
+#### Using the same X train, X test dataset tables and Y train, Y test vectors
+#### Building neural network architecture with 1 hidden layer (ANN1)
+**</b> The number of nodes in the first hidden layer should be equal to the number of input attributes in the datatset**</br>
+**</b>The Dropout layers are used to control overfitting by eliminating weights below a cutoff threshold in order to prevent low weights from overfitting the layers. Here we are removing weights below 10%.**</br>
+**</b> Using the relu activation function after the hidden layer as relu produces 0 as output for all negative inputs and the input value itself is produced as output if the input is > 0. Hence, the relu activation function is more suitable for taking partial derivatives. The Sigmoid function is being used after the output layer to produce output between 0 and 1.**</br>
+**</b> Using the binary_crossentropy loss function since it is a binary classification problem**</br>
+**</b>Wriiten a function below, which returns a Neural Network with one hidden layer by taking in the optimizer as input parameter**
+```{r}
+
+library(keras)
+library(tensorflow)
+
+model_keras_ann1 <- function(opt) {
+ 
+model_keras_ann <- keras_model_sequential()
+model_keras_ann %>%
+  ## hidden layer 1
+  layer_dense(units = 16,
+    kernel_initializer = "uniform",
+    activation = "relu",
+    input_shape = ncol(x_train_disease_pred_tbl)) %>%
+  layer_dropout(rate = 0.1)%>%
+  ## Output Layer
+  layer_dense(units = 1,
+    kernel_initializer = "uniform",
+    activation = "sigmoid") %>%
+    compile(optimizer = "ADAM",
+    loss = "binary_crossentropy",
+    metrics = c("accuracy")
+  )
+
+return(model_keras_ann)
+
+}
+```
+
+
+#### Fitting the Neural Network with 1 hidden layer onto the train data
+```{r}
+model_ann1_fit <- fit(verbose=0,
+  object = model_keras_ann1('adam'),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = 50,
+  epochs = 15,
+  validation_split = 0.30
+)
+```
+
+#### From the below plot also we can identify the suitable number of epochs based on the point where the curve begins to flatten
+```{r}
+plot(model_ann1_fit)
+```
+
+#### Tuning the number of epochs and batch size parameters to see which combination produces the best validation accuracy using ADAM optimizer network by using the ANN1 function written above which return a DL neural network with 1 hidden layer in every iteration of the loop, by taking the optimizer as the function input parameter.
+**</b> The number of epochs & batch size should be chosen in a way that both training and validation accuracies are high thus ensuring that the model doesn't overfit by producing a high training accuracy and low validation accuracy**
+```{r}
+batch_size = c(50,100,150,200)
+epochs = c(10,15,20,40,60,100)
+model_ann1_tuned_fit <- c(0)
+for (i in batch_size) {
+  for (j in epochs) {
+   
+    model_fit <- fit(verbose=0,
+  object = model_keras_ann1('adam'),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = i,
+  epochs = j,
+  validation_split = 0.30
+) 
+  model_ann1_tuned_fit <- c(model_ann1_tuned_fit,model_fit)  
+  }
+  
+ }
+```
+
+
+**</b> Storing the training and validation accuracies for different batch size and epoch values to compare the accuracies for each combination**
+```{r}
+batch_sizes <- c()
+epochs_run <- c()
+validation_accuracies <- c()
+training_accuracies <- c()
+for (i in seq(2,48,2))
+{
+  batch_sizes <- c(batch_sizes,model_ann1_tuned_fit[i]$params$batch_size)
+  epochs_run <- c(epochs_run,model_ann1_tuned_fit[i]$params$epochs)
+}
+
+for (i in seq(3,49,2)) {
+  validation_accuracies <- c(validation_accuracies,tail(model_ann1_tuned_fit[i]$metrics$val_accuracy,n=1))
+  training_accuracies <- c(training_accuracies, tail(model_ann1_tuned_fit[i]$metrics$accuracy,n=1))
+}
+```
+
+#### Table summarizing the model performances and their corresponding batch size and epoch hyperparameters
+**</b> The batch_size value & epochs values with their correpsonding training accuracy and validation accuracy can be seen in the below table**
+```{r}
+performance_summary_df <- data.frame(batch_sizes,epochs_run,training_accuracies,validation_accuracies)
+performance_summary_df
+```
+
+#### Identified the number of Epochs and Batch Size which produced the highest validation accuracy. High validation accuracy is important to ensure that the model produces low variance estimate.
+```{r}
+performance_summary_df$epochs_run[which.max(performance_summary_df$validation_accuracies)]
+performance_summary_df$batch_sizes[which.max(performance_summary_df$validation_accuracies)]
+```
+
+
+#### Hence going ahead with the batch size and epochs that produce the maximum validation accuracy to fit the final ANN1 deep learning model.
+**</b> When the validation accuracy is also as high as training accuracy, we can be assured that the model will produce low bias and low variance estimates.**
+```{r}
+dl_model_keras_ann1 <- model_keras_ann1('adam')
+
+model_ann1_fit <- fit(verbose=0,
+  object = dl_model_keras_ann1,
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = performance_summary_df$batch_sizes[which.max(performance_summary_df$validation_accuracies)],
+  epochs = performance_summary_df$epochs_run[which.max(performance_summary_df$validation_accuracies)],
+  validation_split = 0.30
+)
+
+```
+
+**</b> Making Predictions on the split Test Data using the final ANN1 DL model built using the tibble function and yardstick library**</br>
+**</b>Accuracy and Recall are the 2 most important metrics because Recall helps in minimizing the False Negatives which are highly undesirable when doing disease prediction**
+```{r}
+
+yhat_keras_class_vec <- predict_classes(object = dl_model_keras_ann1, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+yhat_keras_prob_vec <- predict_proba(object = dl_model_keras_ann1, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+estimates_keras_tbl <- tibble::tibble(
+  truth = as.factor(y_test_vec),
+  estimate = as.factor(yhat_keras_class_vec),
+  class_prob = yhat_keras_prob_vec
+)
+#estimates_keras_tbl
+
+```
+
+
+#### Evaluating the ANN1 model performance on the test dataset (Hold One out method), using the same set of metrics: Accuracy, Precision, Recall, F1 score and AUC score to evaluate the performance of the ANN1 Deep Learning model
+**</b> Since the accuracy on the testing data is completely inline with the training accuracy we can be assured that the model is producing low bias and low variance estimate**
+```{r}
+library(yardstick)
+options(yardstick.event_first = F)
+ann1_accuracy <- estimates_keras_tbl %>% metrics(truth, estimate)
+ACCURACY<- ann1_accuracy$.estimate[1]
+
+ann1_auc <-estimates_keras_tbl %>% roc_auc(truth, class_prob)
+AUC<-ann1_auc$.estimate[1]
+
+ann1_precision <-estimates_keras_tbl %>% precision(truth, estimate)
+PRECISION <- ann1_precision$.estimate[1]
+
+ann1_recall <-estimates_keras_tbl %>% recall(truth, estimate)
+RECALL<- ann1_recall$.estimate[1]
+
+ann1_f1 <-estimates_keras_tbl %>% f_meas(truth, estimate)
+F1 <- ann1_f1$.estimate[1]
+
+data.frame(ACCURACY,AUC,PRECISION,RECALL,F1)
+```
+
+
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing ANN1 model**
+```{r}
+
+roc_curve <- roc(y_test_vec,yhat_keras_prob_vec)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best ANN1 model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+**</b> We can observe the improvement in model performance between ANN0 and ANN1**
+
+#### END OF BUILDING ANN1 Deep Learning Model (algorithm number 3)
+
+### 2.4 Artificial Neural Network - 2 hidden layers (ANN2)
+
+#### Using the same X train, X test dataset tables and Y train, Y test vectors
+#### Building neural network architecture with 2 hidden layers (ANN2)
+**</b> The number of nodes in the first hidden layer should be equal to the number of input attributes in the datatset, whereas the number of nodes in the second hidden layer can vary anywhere between 1 and two times of number of input attributes.**</br>
+**</b> Using the relu activation function after the hidden layers as relu produces 0 as output for all negative inputs and the input value itself is produced as output if the input is > 0. Hence, the relu activation function is more suitable for taking partial derivatives. The Sigmoid function itself is being used after the output layer to produce output between 0 and 1.**</br>
+**</b>The Dropout layers are used to control overfitting by eliminating weights below a cutoff threshold in order to prevent low weights from overfitting the layers. Here we are removing weights below 10%.**</br>
+**</b> Using the binary_crossentropy loss function since it is a binary classification problem**</br>
+**</b>Written a function below, which returns a Neural Network with two hidden layers by taking in the optimizer as input parameter**
+```{r}
+
+library(keras)
+library(tensorflow)
+
+model_keras_ann2 <- function(opt) {
+ 
+model_keras_ann <- keras_model_sequential()
+model_keras_ann %>%
+  ## Hidden Layer 1
+  layer_dense(units = 16,
+    kernel_initializer = "uniform",
+    activation = "relu",
+    input_shape = ncol(x_train_disease_pred_tbl)) %>%
+  
+  ## Hidden Layer 2
+  layer_dense(units = 12,
+    kernel_initializer = "uniform",
+    activation = "relu") %>%
+  layer_dropout(rate = 0.1)%>%
+  
+  ## Output Layer
+  layer_dense(units = 1,
+    kernel_initializer = "uniform",
+    activation = "sigmoid") %>%
+    compile(optimizer = opt,
+    loss = "binary_crossentropy",
+    metrics = c("accuracy")
+  )
+
+return(model_keras_ann)
+
+}
+```
+
+
+#### Fitting the Neural Network with 2 hidden layers onto the train data
+```{r}
+model_ann2_fit <- fit(verbose=0,
+  object = model_keras_ann2('adam'),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = 50,
+  epochs = 15,
+  validation_split = 0.30
+)
+```
+
+#### From the below plot also we can identify the suitable number of epochs based on the point where the curve begins to flatten
+```{r}
+plot(model_ann2_fit)
+```
+
+#### Tuning the number of epochs and batch size parameters to see which combination produces the best validation accuracy using ADAM optimizer network by using the ANN2 function written above which returns a DL neural network with 2 hidden layers in every iteration of the loop, by taking the optimizer as the function input parameter.
+**</b> The number of epochs & batch size should be chosen in a way that both training and validation accuracies are high thus ensuring that the model doesn't overfit by producing a high training accuracy and low validation accuracy**
+```{r}
+batch_size = c(50,100,150,200)
+epochs = c(10,15,20,40,60,100)
+model_ann2_tuned_fit <- c(0)
+for (i in batch_size) {
+  for (j in epochs) {
+   
+    model_fit <- fit(verbose=0,
+  object = model_keras_ann2('adam'),
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = i,
+  epochs = j,
+  validation_split = 0.30
+) 
+  model_ann2_tuned_fit <- c(model_ann2_tuned_fit,model_fit)  
+  }
+  
+ }
+```
+
+
+**</b> Storing the training and validation accuracies for different batch size and epoch values to compare the accuracies for each combination**
+```{r}
+batch_sizes <- c()
+epochs_run <- c()
+validation_accuracies <- c()
+training_accuracies <- c()
+for (i in seq(2,48,2))
+{
+  batch_sizes <- c(batch_sizes,model_ann2_tuned_fit[i]$params$batch_size)
+  epochs_run <- c(epochs_run,model_ann2_tuned_fit[i]$params$epochs)
+}
+
+for (i in seq(3,49,2)) {
+  validation_accuracies <- c(validation_accuracies,tail(model_ann2_tuned_fit[i]$metrics$val_accuracy,n=1))
+  training_accuracies <- c(training_accuracies, tail(model_ann2_tuned_fit[i]$metrics$accuracy,n=1))
+}
+```
+
+#### Table summarizing the model performances and their corresponding batch size and epoch hyperparameters
+**</b> The batch_size value & epochs values with their correpsonding training accuracy and validation accuracy can be seen in the below table**
+```{r}
+performance_summary_df <- data.frame(batch_sizes,epochs_run,training_accuracies,validation_accuracies)
+performance_summary_df
+```
+
+#### Identified the number of Epochs and Batch Size which produced the highest validation accuracy
+```{r}
+performance_summary_df$epochs_run[which.max(performance_summary_df$validation_accuracies)]
+performance_summary_df$batch_sizes[which.max(performance_summary_df$validation_accuracies)]
+```
+
+
+#### Hence going ahead with the batch size and epochs that produce the maximum validation accuracy to fit the final ANN2 deep learning model 
+**</b>When the validation accuracy is also as high as training accuracy, we can be assured that the model will produce low bias and low variance estimates** 
+```{r}
+dl_model_keras_ann2 <- model_keras_ann2('adam')
+
+model_ann2_fit <- fit(verbose=0,
+  object = dl_model_keras_ann2,
+  x = as.matrix(x_train_disease_pred_tbl),
+  y = y_train_vec,
+  batch_size = performance_summary_df$batch_sizes[which.max(performance_summary_df$validation_accuracies)],
+  epochs = performance_summary_df$epochs_run[which.max(performance_summary_df$validation_accuracies)],
+  validation_split = 0.30
+)
+
+```
+
+**</b> Making Predictions on the split Test Data using the final ANN2 DL model built using the tibble function and yardstick library**</br>
+**</b>Accuracy and Recall are the 2 most important metrics because Recall helps in minimizing the False Negatives which are highly undesirable when doing disease prediction**
+```{r}
+
+yhat_keras_class_vec <- predict_classes(object = dl_model_keras_ann2, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+yhat_keras_prob_vec <- predict_proba(object = dl_model_keras_ann2, x = as.matrix(x_test_disease_pred_tbl)) %>% as.vector()
+estimates_keras_tbl <- tibble::tibble(
+  truth = as.factor(y_test_vec),
+  estimate = as.factor(yhat_keras_class_vec),
+  class_prob = yhat_keras_prob_vec
+)
+#estimates_keras_tbl
+
+```
+
+
+#### Evaluating the ANN2 model performance on the test dataset (Hold One out method), using the same set of metrics: Accuracy, Precision, Recall, F1 score and AUC score to evaluate the performance of the ANN2 Deep Learning model
+**</b> Since the accuracy on the testing data is completely inline with the training accuracy we can be assured that the model is producing low bias and low variance estimate**
+```{r}
+library(yardstick)
+options(yardstick.event_first = F)
+ann2_accuracy <- estimates_keras_tbl %>% metrics(truth, estimate)
+ACCURACY<- ann2_accuracy$.estimate[1]
+
+ann2_auc <-estimates_keras_tbl %>% roc_auc(truth, class_prob)
+AUC<-ann2_auc$.estimate[1]
+
+ann2_precision <-estimates_keras_tbl %>% precision(truth, estimate)
+PRECISION <- ann2_precision$.estimate[1]
+
+ann2_recall <-estimates_keras_tbl %>% recall(truth, estimate)
+RECALL<- ann2_recall$.estimate[1]
+
+ann2_f1 <-estimates_keras_tbl %>% f_meas(truth, estimate)
+F1 <- ann2_f1$.estimate[1]
+
+data.frame(ACCURACY,AUC,PRECISION,RECALL,F1)
+```
+
+
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing ANN2 model**
+```{r}
+
+roc_curve <- roc(y_test_vec,yhat_keras_prob_vec)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve for the best ANN2 model**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+#### END OF BUILDING ANN2 Deep Learning Model (algorithm number 4)
+
+## SECTION 3: Combination & Comparison of multiple Machine Learning Algorithms
+### 3.1 Applying DECISION TREE INDUCTION
+
+**</b> Generating Training and Validation datasets for decision tree with 70% & 30% splits respectively**
+```{r}
+library(caret)
+library(rpart)
+set.seed(73)
+
+disease_prediction_training$Disease <- as.factor(disease_prediction_training$Disease)
+disease_prediction_training$Smoke <- as.factor(disease_prediction_training$Smoke)
+disease_prediction_training$Alcohol <- as.factor(disease_prediction_training$Alcohol)
+disease_prediction_training$Exercise <- as.factor(disease_prediction_training$Exercise)
+disease_prediction_training$Height <- as.numeric(disease_prediction_training$Height)
+disease_prediction_training$age_groups <- NULL
+disease_prediction_training$bmi_groups <- NULL
+
+train_index <- createDataPartition(disease_prediction_training$Disease, p = 0.7, list = FALSE)
+
+disease_prediction_dt_tr_df <- disease_prediction_training[train_index, ]
+
+disease_prediction_dt_test_df <- disease_prediction_training[-train_index, ]
+```
+
+
+
+**Building a Decision Tree baseline model only by tuning the Complexity Parameter (CP) to produce best accuracy**
+```{r}
+
+#dt_model_disease <- train(Disease~., data = disease_prediction_dt_tr_df, method = "rpart",
+                     #  metric = "Accuracy",
+                      # tuneLength = 8)
+```
+
+**8 models were tuned and the model with lowest cp produced the highest accuracy, which was used as the final resulting model**
+```{r}
+print(dt_model_disease)
+```
+
+
+**Making Classifications on Validation Data using the baseline Decision Tree Model built above using the Training data**
+```{r}
+disease_dt_predict <- predict(dt_model_disease, newdata = disease_prediction_dt_test_df, na.action = na.omit, type = "raw")
+```
+
+**Evaluating baseline decision tree Model Performance by calculating Accuracy Precision Recall & F1 score on the classification done on the Validation Data**
+```{r}
+disease_prediction_dt_test_df$predicted_disease_baseline <- disease_dt_predict
+conf_matrix <- data.frame(table(disease_prediction_dt_test_df$Disease,disease_prediction_dt_test_df$predicted_disease_baseline)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`=='1' & conf_matrix$`Predicted Class`=='1']/sum(conf_matrix$Count[conf_matrix$`Predicted Class`=='1'])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`=='1' & conf_matrix$`Predicted Class`=='1']/sum(conf_matrix$Count[conf_matrix$`Actual class`=='1'])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of DT Algorithm in classifying Disease is :",Accuracy_DT)
+paste("Precision of DT Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of DT Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of DT Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+#### Introducing the Hyperparameters minbucket, minsplit and maxdepth alongwith CP for tuning the model
+**Minbucket is the minimum number of observations in any leaf node, Minsplit is the minimum number of observations that must exist in a node in order for a split to be attempted and MaxDepth is the maximum depth of any node of the final tree**</br>
+**</br>Our aim is to tune these parameters to produce maximum accuracy, i.e. a model with minimum bias and at the same time the variance should not be too high by producing a good trade off between Bias and Variance to avoid underfitting and overfitting.**</br>
+**</br>Hence minsplit, maxdepth and minbucket should be adjusted so as to pre prune the model to produce a least complex model(to reduce overfitting and variance) with maximum accuracy (to minimize bias)**</br>
+
+**</br>Creating a Grid with all combinations of 4 different values of minsplit, maxdepth and minbucket**
+```{r}
+library(tidyverse)
+gs <- list(minsplit = c(20,15,10,5),
+           maxdepth = c(30,25,20,15),
+           minbucket = c(6,5,4,3)) %>% 
+  cross_d() # Convert to data frame grid
+```
+
+**</br>Performing Grid Search with all combinations of different values of minsplit, maxdepth and minbucket created above and measuring the accuracy for each combination**
+```{r}
+#accuracy_values <- c()
+#for (i in seq(1,nrow(gs))) {
+  
+#  dt_model_disease_tuned <- train(Disease ~ ., data = disease_prediction_dt_tr_df,method = "rpart",metric = "Accuracy",
+#                       tuneLength = 8,control = rpart.control(minsplit =as.numeric(gs[i,"minsplit"]), minbucket = as.numeric(gs[i,"minbucket"]),       #maxdepth = as.numeric(gs[i,"maxdepth"])))
+#  accuracy_values<- c(accuracy_values,max(dt_model_disease_tuned$results$Accuracy))
+#}
+```
+
+#### Displaying the Accuracy of 64 Decision Tree Models for different combinations of the hyperparameters minsplit, maxdepth and minbucket ordered in descending order by accuracy.
+**We can see that the first row in the below table with the below shown minsplit, maxdepth and  minbucket values has the best accuracy and hence can be considered the best model.**</br>
+**</br>But since the accuracy values are approximately equal, we will use a simpler model with lower maxdepth to avoid overfitting and produce low variance estimates. Based on Occam's Razor principle, we need to chose a simpler model, amongst the models that produce the same accuracy**
+```{r}
+gs$accuracy <- accuracy_values
+gs[order(-gs$accuracy),]
+```
+
+**Creating a decision tree model with maxdepth 15 and the above obtained minsplit & minbucket so as avoid overfitting and reduce estimate variance**</br>
+```{r}
+# dt_model_disease_final_tuned <- train(Disease ~ ., data = disease_prediction_dt_tr_df, method = "rpart",metric = "Accuracy",
+#                       tuneLength = 8,control = rpart.control(minsplit = gs$minsplit[which.max(gs$accuracy)], minbucket = #gs$minbucket[which.max(gs$accuracy)], maxdepth = 15))
+# print(dt_model_disease_final_tuned)
+```
+
+**Using the final best performing model that produced unbiased and low variance estimates to predict the classes (classify) on the validation dataset**
+```{r}
+disease_dt_prediction <- predict(dt_model_disease_final_tuned, newdata = disease_prediction_dt_test_df, na.action = na.omit, type = "raw")
+```
+
+
+**Evaluating Model Performance by calculating Accuracy, Precision, Recall & F1 score on the classification done on the Test Data**</br>
+**</b> The training accuracy and validation accuracy are in line, hence the model variance is low**
+```{r}
+disease_prediction_dt_test_df$predicted_disease_tuned <- disease_dt_prediction
+conf_matrix <- data.frame(table(disease_prediction_dt_test_df$Disease,disease_prediction_dt_test_df$predicted_disease_tuned)) 
+colnames(conf_matrix)<- c('Actual class','Predicted Class','Count')
+
+Accuracy_DT <- sum(conf_matrix$Count[conf_matrix$`Actual class`==conf_matrix$`Predicted Class`])/sum(conf_matrix$Count)
+Precision_DT <- conf_matrix$Count[conf_matrix$`Actual class`=='1' & conf_matrix$`Predicted Class`=='1']/sum(conf_matrix$Count[conf_matrix$`Predicted Class`=='1'])
+Recall_DT <- conf_matrix$Count[conf_matrix$`Actual class`=='1' & conf_matrix$`Predicted Class`=='1']/sum(conf_matrix$Count[conf_matrix$`Actual class`=='1'])
+F1_score_DT <- (2*Precision_DT*Recall_DT)/(Precision_DT+Recall_DT)
+
+paste("Accuracy of tuned DT Algorithm in classifying Disease :",Accuracy_DT)
+paste("Precision of tuned DT Algorithm in classifying Disease is :",Precision_DT)
+paste("Recall of tuned DT Algorithm in classifying Disease is :",Recall_DT)
+paste("F1 Score of tuned DT Algorithm in classifying Disease is :",F1_score_DT)
+```
+
+```{r}
+#install.packages("rattle")
+library(rattle)
+```
+
+#### displaying the best performing Decision Tree model
+```{r}
+fancyRpartPlot(dt_model_disease_final_tuned$finalModel, main = "Decision Tree to classify Disease")
+```
+
+
+#### ROC & AUROC for Decision Tree Induction
+```{r}
+#install.packages("pROC")
+library(pROC)
+```
+
+**Generated ROC curve and calculated Area Under Curve metric for the identified best performing decision tree model**
+```{r}
+dt_pred_disease_prob <- predict(dt_model_disease_final_tuned, newdata = disease_prediction_dt_test_df, na.action = na.omit, type = "prob")
+roc_curve <- roc(disease_prediction_dt_test_df$Disease,dt_pred_disease_prob$`1`)
+plot(roc_curve)
+```
+
+**Obtained the area under the ROC curve**
+```{r}
+paste("Area Under the ROC curve is :",auc(roc_curve))
+```
+
+### Analyzing the importance of all the variables in the best performing Decision Tree model & comparing with the importance of variables as per other learning algorithms
+
+#### 1. The top 5 most important features as per Decision Tree are "High Blood Pressure", "Low Blood Pressure", "Age", "Cholestrol high" & "cholestrol normal"
+```{r}
+varImp(dt_model_disease_final_tuned)
+```
+
+##### 2. The top 5 most important variables as per Logistic Regression which have the lowest P-values and the highest absolute coefficients are, "High Blood Pressure", "cholestrol_normal", "Age", "Cholestrol high" & "bmi", which is mostly consistent with the top 5 most important variables as per Decision Tree. The only difference is that "bmi" is slightly more important than "low blood pressure" as per logistic regression, due to larger coefficient whereas the vice versa is true for Decision Tree.
+```{r}
+#library(caret)
+#logistic_summary_disease <- train(Disease ~ ., data = disease_prediction_training_df_tr_split, method = "glm", family = "binomial")
+summary(logistic_summary_disease)
+```
+
+#### 3. The top 5 most important variables as per Random Forest are "High Blood Pressure", "Low Blood Pressure", "Age", "bmi" and "weight" as shown below. The top 3 are same as that of Decision Tree and only the 4th and 5th most important variables are different between Decision Tree and Random Forest.
+```{r}
+varImp(tuned_model_rf)
+```
+
+#### 4. The top 5 most important variables as per Gradient Boosting Machine are "High Blood Pressure", "Age", "Cholestrol high", "bmi" and "Cholestrol normal" as shown below. This is mostly consistent with the top 5 most important variables as per Decision Tree, with the only difference being that "Low Blood Pressure" is in the top 5 instead of "bmi" in case of Decision Tree, whereas the vice versa is true for Gradient Boosting Machine.
+```{r}
+library(gbm)
+varImp(gbm_tuned)
+```
+
+### Creating Model Performance Master Table
+#### The 2 most important performance evaluation metrics for this dataset are "ACCURACY" & "RECALL". Since the dataset is balanced, with the number of people with disease and without disease being approximately equal, we can certainly use 'accuracy' to measure the model performance. 
+#### The next most important metric is "RECALL". "Recall" is also extremely important when doing disease prediction, because we want to minimize false negatives, but without compromising much on ACCURACY. False Negatives are cases when the patient actually has the disease but our ML model falsely classifies the patient as not having the disease, which is highly undesireable and such cases have to be minimized by increasing our RECALL.
+#### If we simply reduce the probability threshold to a very low value and classify everything as Positive, our False Negatives will be 0 and our RECALL may reach 100%, but then by doing so our ACCURACY will be very low, which will make it a bad model. Hence Recall has to be maximized without compromising on ACCURACY.
+#### In our below master table, we can see that Accuracies of most of the models are almost inline with only a minor difference. Hence we will sort the table in decreasing order of their "RECALL" scores.
+**</b> We can see the models with the highest RECALL score and also high AccURACY scores. We can observe that the Deep Learning Neural Network models (ANN0, ANN1, ANN2) and the Ensemble Models (GBM, RF) are one of the top performing models.**
+```{r}
+Algorithm <- c('KNN','Naive Bayes Classifier','Random Forest','Gradient Boosting Machine','Linear SVM','Non Linear SVM','Logistic Regression','Decision Tree','ANN0','ANN1','ANN2')
+Hyperparameters <- c('K','Laplace','ntree,.mtry','depth,trees,shrinkage,minobs','C','sigma,C','alpha,lambda','minsplit,maxdepth,minbucket','batchsize,epochs','batchsize,epochs,layerdropout,units','batchsize,epochs,layerdropout,units')
+Accuracy <- c(0.7284,0.7135,0.7341,0.7327,0.7288,0.7384,Accuracy_Logistic,Accuracy_DT,ann0_accuracy$.estimate[1],ann1_accuracy$.estimate[1],ann2_accuracy$.estimate[1])
+Recall <- c(0.67914,0.6133,0.6871,0.7001,0.6117,0.6572,Recall_Logistic,Recall_DT,ann0_recall$.estimate[1],ann1_recall$.estimate[1],ann2_recall$.estimate[1])
+F1_score <- c(0.7143,0.6834,0.7226,0.7253,0.6929,0.7152,F1_score_Logistic,F1_score_DT,ann0_f1$.estimate[1],ann1_f1$.estimate[1],ann2_f1$.estimate[1])
+AUCs <- c(0.7918,0.7813,0.7913,0.8006,NA,NA,auc_logistic,auc(roc_curve),ann0_auc$.estimate[1],ann1_auc$.estimate[1],ann2_auc$.estimate[1])
+ApproxRun_Time <- c('30 minutes','5 minutes','2 hours','1 hour','2 hours','2 hours','10 minutes','30 minutes','10 minutes','10 minutes','10 minutes')
+
+master_table_df <- data.frame(Algorithm,Hyperparameters,Accuracy,Recall,ApproxRun_Time)
+
+master_table_df <- master_table_df[order(-Recalls,-Accuracies),]
+
+
+
+master_table_df
+```
+
+### END of Combination & Comparison of multiple algorithms
+
+## SECTION 4: PREDICTION and INTERPRETATION
+#### Importing the TEST Dataset to apply all the built models on the test dataset to predict if each person in the testing dataset has the disease
+```{r}
+setwd("D:/SYR ADS/Sem 2/IST_707_Data_Analytics/HW4")
+
+getwd
+
+disease_prediction_testing <- read.csv("Disease Prediction Testing.csv")
+```
+
+**VIEWING THE STRUCTURE and SUMMARY STATISTICS of the Data and checking for missing values**
+```{r}
+
+str(disease_prediction_testing)
+summary(disease_prediction_testing)
+
+```
+
+### DATA PREPARATION of Testing Data
+**</b>From the structure and summary of the data we can observe that the Min and Max values of the columns Low Blood Pressure and High Blood Pressure are not practically possible values and hence they are noise/outliers which need to be treated. Hence these columns need to be winsorized.**</br>
+**</b> Winsorization is a data treatment process where the extreme outlier values are replaced with less extreme values which are practically possible**</br>
+**</b>The min & max of low BP (diastolic BP) fall in the range of 45 to 140 and hence any value that is less than 45 is replaced with 45 and any value greater than 140 is replaced with 140**</br>
+
+```{r}
+disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure<45] <- 45
+
+disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>140] <- 140
+```
+
+**</b>Verifying that the Min & Max values of Low Blood Pressure (Diastolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_testing$Low.Blood.Pressure)
+```
+
+**</b>The possible values for the min & max of High BP (Systolic BP) fall in the range of 70 to 200 and hence any value that is less than 70 is replaced with 70 and any value greater than 200 is replaced with 200**
+```{r}
+disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$High.Blood.Pressure<70] <- 70
+
+disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$High.Blood.Pressure>200] <- 200
+```
+
+**</b>Verifying that the Min & Max values of High Blood Pressure (Systolic BP) are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_testing$High.Blood.Pressure)
+```
+
+**</b> There are 84 instances where Low BP is > high BP even after winsorizing which needs to treated by swapping the values**
+```{r}
+length(disease_prediction_testing[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure,1])
+```
+
+**</b> Swapping the values wherever Low BP > High BP which is not permissible**
+```{r}
+low_bp_values <- disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure]
+
+high_bp_values <- disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure]
+
+disease_prediction_testing$Low.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure] <- high_bp_values
+
+disease_prediction_testing$High.Blood.Pressure[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure] <- low_bp_values
+
+```
+
+**</b> Verifying that there are no instances with low bp values > high bp values**
+```{r}
+length(disease_prediction_testing[disease_prediction_testing$Low.Blood.Pressure>disease_prediction_testing$High.Blood.Pressure,1])
+```
+
+**</b>Any value that is less than 28.9 are replaced with 28.9**
+```{r}
+disease_prediction_testing$Weight[disease_prediction_testing$Weight<28.9] <- 28.9
+```
+
+**</b>Verifying that the Min & Max values of Weight are in the correct practically permissible range and the outliers have been eliminated**
+```{r}
+summary(disease_prediction_testing$Weight)
+```
+
+
+#### DATA PREPARATION for LOGISTIC REGRESSION:
+#### For LOGISTIC REGRESSION, we require all the categorical variables to be converted to dummies by performing one hot encoding and also all the numeric variables have to be normalized so that all the columns have values in the range of 0 to 1.
+**</b> Creating Dummy Variables out of all categorical variables by performing one hot encoding and normalizing all numeric columns using Min Max scaler**
+```{r}
+normalize <- function(x) {
+  return ((x - min(x)) / (max(x) - min(x)))
+}
+library(fastDummies)
+disease_prediction_testing_df <- disease_prediction_testing
+disease_prediction_testing_df<-fastDummies::dummy_cols(disease_prediction_testing_df,select_columns=c('Gender','Cholesterol','Glucose'))
+
+disease_prediction_testing_df$bmi <- disease_prediction_testing_df$Weight/((disease_prediction_testing_df$Height/100)*(disease_prediction_testing_df$Height/100))
+disease_prediction_testing_df$Age <- normalize(disease_prediction_testing_df$Age)
+disease_prediction_testing_df$Height <- normalize(disease_prediction_testing_df$Height)
+disease_prediction_testing_df$Weight <- normalize(disease_prediction_testing_df$Weight)
+disease_prediction_testing_df$bmi <- normalize(disease_prediction_testing_df$bmi)
+disease_prediction_testing_df$Low.Blood.Pressure <- normalize(disease_prediction_testing_df$Low.Blood.Pressure)
+disease_prediction_testing_df$High.Blood.Pressure <- normalize(disease_prediction_testing_df$High.Blood.Pressure)
+
+i <- sapply(disease_prediction_testing_df, is.integer)
+disease_prediction_testing_df[,i] <- lapply(disease_prediction_testing_df[i], as.factor)
+
+disease_prediction_testing_df$Gender <- NULL
+disease_prediction_testing_df$Cholesterol <- NULL
+disease_prediction_testing_df$Glucose <- NULL
+disease_prediction_testing_df$age_groups <- NULL
+disease_prediction_testing_df$ID <- NULL
+disease_prediction_testing_df$bmi_groups <- NULL
+disease_prediction_testing_df$Gender_male <- NULL
+disease_prediction_testing_df$ID <- NULL
+
+```
+
+
+#### 1. Obtaining Predicted values for disease on TEST data using the final LOGISTIC REGRESSION model**
+```{r}
+LR <- predict(tuned_model_logistic, newdata = disease_prediction_testing_df)
+```
+
+#### PREPARING DATA for ANN
+**</b> step_center() to mean-center the data & step_scale() to scale the data**</br>
+**</b> The last step is to prepare the recipe with the prep() function**
+```{r}
+library(recipes)
+disease_rec_obj_test <- recipes::recipe(x = disease_prediction_testing_df)%>%
+  recipes::step_center(Age,Height,Weight,High.Blood.Pressure,Low.Blood.Pressure,bmi)%>%
+  recipes::step_scale(Age,Height,Weight,High.Blood.Pressure,Low.Blood.Pressure,bmi)%>%
+  recipes::prep(data = disease_prediction_testing_df)
+
+```
+
+**</b>Applying the “recipe” to data set with the bake() function which processes the data following our recipe steps**
+```{r}
+disease_prediction_testing_baked_df <- recipes::bake(disease_rec_obj_test, new_data = disease_prediction_testing_df)
+
+i <- sapply(disease_prediction_testing_baked_df, is.factor)
+disease_prediction_testing_baked_df[,i] <- lapply(disease_prediction_testing_baked_df[i], as.character)
+
+j <- sapply(disease_prediction_testing_baked_df, is.character)
+disease_prediction_testing_baked_df[,j] <- lapply(disease_prediction_testing_baked_df[j], as.integer)
+```
+
+#### 2. Obtaining Predicted values for disease on TEST data using the final ANN0, ANN1 & ANN2 models
+```{r}
+library(yardstick)
+library(keras)
+library(tensorflow)
+ANN2 <- predict_classes(object = dl_model_keras_ann2, x = as.matrix(disease_prediction_testing_baked_df)) %>% as.vector()
+
+ANN1 <- predict_classes(object = dl_model_keras_ann1, x = as.matrix(disease_prediction_testing_baked_df)) %>% as.vector()
+
+ANN0 <- predict_classes(object = dl_model_keras_ann0, x = as.matrix(disease_prediction_testing_baked_df)) %>% as.vector()
+```
+
+
+#### Preparing Data for Decision Tree
+```{r}
+disease_prediction_testing_dt <- disease_prediction_testing
+disease_prediction_testing_dt$bmi <- disease_prediction_testing_dt$Weight/((disease_prediction_testing_dt$Height/100)*(disease_prediction_testing_dt$Height/100))
+disease_prediction_testing_dt$ID <- NULL
+disease_prediction_testing_dt$Smoke <- as.factor(disease_prediction_testing_dt$Smoke)
+disease_prediction_testing_dt$Alcohol <- as.factor(disease_prediction_testing_dt$Alcohol)
+disease_prediction_testing_dt$Exercise <- as.factor(disease_prediction_testing_dt$Exercise)
+disease_prediction_testing_dt$Height <- as.numeric(disease_prediction_testing_dt$Height)
+
+```
+
+
+#### 3. Obtaining Predicted values for disease on TEST data using the DECISION TREE model
+```{r}
+DT <- predict(dt_model_disease_final_tuned, newdata = disease_prediction_testing_dt, na.action = na.omit, type = "raw")
+```
+
+
+##### Writing the final predictions to a CSV
+```{r}
+disease_prediction_testing$DT <- DT
+disease_prediction_testing$LR <- LR
+disease_prediction_testing$ANN0 <- ANN0
+disease_prediction_testing$ANN1 <- ANN1
+disease_prediction_testing$ANN2 <- ANN2
+
+final_predictions <- disease_prediction_testing[,c('ID','DT','LR','ANN0','ANN1','ANN2')]
+write.csv(final_predictions,"HW_04_Kumar_Bhavish_Predictions.csv", row.names = FALSE)
+```
+
+
+## D. CONCLUSION:
+**</b> From the above model building, tuning and evaluation we can understand the importance of tuning hyperparameters through a grid search to improve the model performance. We also the learned the importance of K fold cross validation and hold one out techniques to ensure that the model performs well not only on the training data but also on the validation data which it has not seen before. From the above 5 algorithms we can observe that the Deep Learning Models like Artificial Neural Networks with 0 or more hidden layers are one of the best performing models. For ANN, we can tune the batch size and epochs along with number of nodes and dropout rate in order to produce low bias and low variance estimates such that the model performs well not only on training data, but also on validation data.**
